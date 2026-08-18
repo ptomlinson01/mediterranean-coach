@@ -161,6 +161,25 @@ ok(!ctx.includes('undefined') && !ctx.includes('NaN'), 'no undefined/NaN leaks i
 ok(C.systemPrompt().includes(R.RECIPES[0].id), 'system prompt carries the recipe index');
 console.log(`\ncontext file: ${ctx.length} chars, system prompt ${C.systemPrompt().length} chars (~${Math.round(C.systemPrompt().length / 3.6)} tokens)`);
 
+/* ── plain-groceries guarantee ─────────────────────────────────── */
+const BRITISH = /courgette|aubergine|\brocket\b|tinned|wholemeal|passata|\bmince\b|crispbread|caster|rasher/i;
+const SPECIALTY = /farro|orzo|puy|harissa|tahini|za'?atar|miso paste|anchov|caper|sumac|freekeh|bulgur|pancetta|halloumi|labneh/i;
+
+const offenders = [];
+for (const r of R.RECIPES) {
+  const text = [r.name, ...r.ing.map(i => i.n), ...r.steps].join(' | ');
+  if (BRITISH.test(text)) offenders.push(`${r.id}: British term -> ${text.match(BRITISH)[0]}`);
+  if (SPECIALTY.test(text)) offenders.push(`${r.id}: specialty item -> ${text.match(SPECIALTY)[0]}`);
+}
+ok(offenders.length === 0, `every ingredient is a normal US supermarket item${offenders.length ? '\n   ' + offenders.join('\n   ') : ''}`);
+
+const proteinSources = { chicken: /chicken/i, 'ground beef/turkey': /ground (beef|turkey)/i, eggs: /\beggs?\b/i,
+                   tuna: /tuna/i, salmon: /salmon/i, shrimp: /shrimp/i, pork: /pork/i, sushi: /sushi|poke/i };
+for (const [label, re] of Object.entries(proteinSources)) {
+  const n = R.RECIPES.filter(r => r.ing.some(i => re.test(i.n))).length;
+  ok(n >= 1, `${label}: appears in ${n} recipes`);
+}
+
 /* ── recipe data integrity ────────────────────────────────────── */
 let bad = [];
 for (const r of R.RECIPES) {

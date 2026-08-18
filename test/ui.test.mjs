@@ -35,7 +35,7 @@ await page.goto(BASE + '/index.html', { waitUntil: 'networkidle' });
 await step('welcome screen renders', async () => {
   await page.waitForSelector('.ob-hero h1', { timeout: 5000 });
   const h = await page.textContent('.ob-hero h1');
-  if (!/Mediterranean/.test(h)) throw new Error('title was ' + h);
+  if (!/Plate/.test(h)) throw new Error('title was ' + h);
 });
 await page.screenshot({ path: `${SHOT}/01-welcome.png` });
 
@@ -126,11 +126,11 @@ await step('recipes tab searches', async () => {
   await page.click('[data-tab="recipes"]');
   await page.waitForSelector('.rcard', { timeout: 3000 });
   const all = (await page.$$('.rcard')).length;
-  await page.fill('#rq', 'chickpea');
+  await page.fill('#rq', 'chicken');
   await page.waitForTimeout(250);
   const some = (await page.$$('.rcard')).length;
   if (!(some > 0 && some < all)) throw new Error(`search did not filter (${all} -> ${some})`);
-  console.log(`      ${all} recipes, ${some} match "chickpea"`);
+  console.log(`      ${all} recipes, ${some} match "chicken"`);
   await page.fill('#rq', '');
   await page.waitForTimeout(200);
 });

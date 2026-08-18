@@ -1,7 +1,7 @@
 {
-  "name": "Mediterranean Coach",
-  "short_name": "Med Coach",
-  "description": "A Mediterranean-diet weight-loss coach that plans around the hours you actually work.",
+  "name": "Plate",
+  "short_name": "Plate",
+  "description": "Ordinary food, planned around the hours you actually work.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -1,12 +1,27 @@
-# Mediterranean Coach
+# Plate
 
-A Mediterranean-diet weight-loss app for the iPhone, built for someone around 60 who is
-roughly 25 lb overweight and whose real obstacle is not knowledge — it is a working week.
+A weight-loss app for the iPhone, built for someone around 60 whose real obstacle is not
+knowledge — it is a working week.
 
 It is a self-contained web app you add to your home screen. No App Store, no account,
 no server, no subscription. Everything lives on the phone.
 
+**No unusual groceries.** Chicken, ground beef, eggs, canned tuna, salmon, shrimp, pork,
+vegetables, rice, potatoes, bread and pasta. Every ingredient is sold in a normal American
+supermarket under the name the app uses for it.
+
 ---
+
+## What you actually eat
+
+The pattern underneath is the one with the best evidence behind it — vegetables at the
+center of the plate, olive oil as the main fat, chicken and fish more often than red meat,
+beans and whole grains, fruit for dessert. That is the entire thing. It is often called
+"Mediterranean", which makes people think they need feta, olives and a specialty aisle.
+They do not. Nothing in this app requires an ingredient you would have to go looking for.
+
+Carbs stay in. Rice, potatoes, bread and pasta are all here at sensible portions, because
+a plan you resent is a plan you quit in March.
 
 ## The two ideas it is built on
 
@@ -114,7 +129,7 @@ sw.js                 offline cache (never touches the API)
 make_icons.py         regenerates the icons: python make_icons.py
 js/
   engine.js           BMR/TDEE, capped deficit, protein floor, day archetypes
-  recipes.js          39 Mediterranean recipes, each tagged with an effort tier
+  recipes.js          45 everyday recipes, each tagged with an effort tier
   planner.js          week building, leftover routing, portion sizing, groceries
   store.js            all state, localStorage only
   context.js          the context file, the system prompt, the twelve patterns
@@ -140,6 +155,9 @@ test/
   200 lb man comes to roughly 1,450 kcal a day against a target near 1,950. Rather than
   invent bigger recipes, the planner serves more of the same food and tells you so
   ("one and a half"). Without this the app would quietly under-feed you by 500 kcal a day.
+- **Only normal groceries.** A regression test fails the build if a recipe sneaks in a
+  British term (courgette, tinned, rocket) or a specialty item (farro, harissa, tahini).
+  The bar is: could you buy this at H-E-B without asking anyone where it is.
 - **A batch cook may reappear at most twice.** The supply-chain logic would happily route a
   six-serving braise across six consecutive nights, which is arithmetically perfect and
   completely inedible. Anything over the cap is flagged for the freezer.
@@ -168,6 +186,13 @@ The flip side: clearing Safari's website data wipes it. **Me → Backup and rese
 your whole record as JSON — do that occasionally and paste it somewhere safe.
 
 ---
+
+## A note on the repo name
+
+The repository and URL still say `mediterranean-coach` because the app is already installed
+on a phone pointing at that address, and renaming it would break the home-screen icon. The
+app itself is called Plate. If the URL ever needs to match, that is a rename plus
+re-adding it to the home screen.
 
 ## Not medical advice
 

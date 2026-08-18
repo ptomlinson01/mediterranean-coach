@@ -195,9 +195,10 @@ function welcomeStep() {
   return `
     <div class="ob-hero">
       <div class="ob-mark">🫒</div>
-      <h1>Mediterranean Coach</h1>
-      <p class="lede">A weight-loss plan built around a real Mediterranean way of eating — and around the hours you actually work, not the hours a meal plan wishes you worked.</p>
+      <h1>Plate</h1>
+      <p class="lede">Ordinary food from an ordinary grocery store, planned around the hours you actually work — not the hours a meal plan wishes you worked.</p>
       <ul class="ob-points">
+        <li><b>Nothing unusual to buy.</b> Chicken, ground beef, eggs, canned tuna, salmon, shrimp, pork, vegetables, rice and potatoes. That is the whole shopping list.</li>
         <li><b>Your week is a supply chain.</b> The batch cook lands on your lightest day and feeds your heaviest ones.</li>
         <li><b>Protein stays high.</b> Past 55 the risk is not failing to lose weight, it is losing muscle along with the fat.</li>
         <li><b>The deficit stays moderate.</b> This is built for the version of you that is still doing it in eight months.</li>

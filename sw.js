@@ -4,7 +4,7 @@
    basement, or anywhere the signal dies. Calls to the Anthropic API are never
    cached and never intercepted — only the coach needs the network. */
 
-const CACHE = 'medcoach-v1';
+const CACHE = 'plate-v2';
 
 const SHELL = [
   './',
