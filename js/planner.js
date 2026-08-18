@@ -49,6 +49,18 @@ export function exclusions(profile) {
   return [...terms(profile.dislikes), ...terms(profile.allergies), ...(s.refused || [])];
 }
 
+/**
+ * Does the kitchen actually contain what this recipe needs?
+ *
+ * Onboarding has always asked which equipment you own and then thrown the answer
+ * away, which is how someone with no blender got handed a smoothie. A recipe now
+ * declares what it requires and does not get planned without it.
+ */
+function equipped(recipe, kitchen) {
+  if (!recipe.needs?.length) return true;
+  return recipe.needs.every(item => kitchen.includes(item));
+}
+
 function excluded(recipe, banned) {
   if (!banned.length) return false;
   const hay = [recipe.name, ...recipe.ing.map(i => i.n), ...recipe.tags].join(' ').toLowerCase();
@@ -96,7 +108,8 @@ export function buildWeek(profile, kcal, seed = 1) {
   const rand = rng(seed);
   const banned = exclusions(profile);
   const loved = get().loved || [];
-  const pool = RECIPES.filter(r => !excluded(r, banned));
+  const kitchen = profile.kitchen || [];
+  const pool = RECIPES.filter(r => !excluded(r, banned) && equipped(r, kitchen));
 
   const start = weekStart(new Date());
   const days = [];
@@ -175,6 +188,9 @@ export function buildWeek(profile, kcal, seed = 1) {
       // Relax rather than leave a hole: first ignore the clock, then the tier.
       if (!cands.length) cands = pool.filter(r => r.meal.includes(slot) && rank(r.effort) <= maxRank);
       if (!cands.length) cands = pool.filter(r => r.meal.includes(slot));
+      // Absolute last resort: relax the equipment gate rather than leave a hole.
+      // Never relax allergies or dislikes — those are not preferences.
+      if (!cands.length) cands = RECIPES.filter(r => r.meal.includes(slot) && !excluded(r, banned));
       if (!cands.length) continue;
 
       const chosen = pick(cands, day.budget[slot], used, loved, rand);
@@ -273,7 +289,7 @@ export function served(slot) {
 export function swap(plan, dayIndex, slot, profile) {
   const day = plan.days[dayIndex];
   const banned = exclusions(profile);
-  const pool = RECIPES.filter(r => !excluded(r, banned));
+  const pool = RECIPES.filter(r => !excluded(r, banned) && equipped(r, profile.kitchen || []));
   const current = day.slots[slot]?.id;
   const used = plan.days.flatMap(d => Object.values(d.slots).map(s => s.id));
 
@@ -302,7 +318,7 @@ export function retune(plan, dayIndex, hours, profile, alreadyEaten = []) {
   day.budget = slotBudget(dailyKcal, hours);
 
   const banned = exclusions(profile);
-  const pool = RECIPES.filter(r => !excluded(r, banned));
+  const pool = RECIPES.filter(r => !excluded(r, banned) && equipped(r, profile.kitchen || []));
   const used = plan.days.flatMap(d => Object.values(d.slots).map(s => s.id));
   const changed = [];
 

@@ -180,6 +180,39 @@ for (const [label, re] of Object.entries(proteinSources)) {
   ok(n >= 1, `${label}: appears in ${n} recipes`);
 }
 
+/* ── the operator's actual constraints ─────────────────────────── */
+const rawTomato = R.RECIPES.filter(r =>
+  r.ing.some(i => /tomato/i.test(i.n) && !/canned|paste|marinara|salsa|sauce/i.test(i.n)));
+ok(rawTomato.length === 0, `no recipe serves a raw tomato${rawTomato.length ? ' -> ' + rawTomato.map(r => r.id).join(', ') : ' (cooked and canned still fine)'}`);
+
+ok(!R.RECIPES.some(r => /pork loin/i.test(r.name) || r.ing.some(i => /pork loin/i.test(i.n))), 'no pork loin anywhere');
+ok(R.RECIPES.some(r => r.ing.some(i => /pork chop/i.test(i.n))), 'pork chops still in');
+
+const cottage = R.RECIPES.filter(r => r.ing.some(i => /cottage cheese/i.test(i.n)));
+ok(cottage.every(r => r.meal.length === 1 && r.meal[0] === 'snack'), `cottage cheese is snack-only (${cottage.length} recipe)`);
+ok(!cottage.some(r => r.ing.some(i => /tomato/i.test(i.n))), 'cottage cheese never paired with tomatoes');
+
+ok(R.RECIPES.filter(r => r.ing.some(i => /refried/i.test(i.n))).length >= 3, 'refried beans used in at least 3 recipes');
+ok(R.RECIPES.filter(r => r.ing.some(i => /rotisserie/i.test(i.n))).length >= 4, 'rotisserie chicken used in at least 4 recipes');
+
+/* ── equipment gating: the kitchen answer must actually matter ──── */
+const noBlender = R.RECIPES.filter(r => r.needs?.includes('blender'));
+ok(noBlender.length === 0, 'nothing requires a blender');
+
+// A kitchen with no oven must never be handed an oven recipe.
+S.set(st => { st.profile.kitchen = ['stovetop', 'microwave']; });
+const stovetopOnly = P.buildWeek(S.get().profile, t.kcal, 11);
+const ovenLeaks = [];
+for (const d of stovetopOnly.days) {
+  for (const slot of P.SLOTS) {
+    const r = R.BY_ID[d.slots[slot]?.id];
+    if (r?.needs?.includes('oven')) ovenLeaks.push(`${d.name} ${slot}: ${r.name}`);
+  }
+}
+ok(ovenLeaks.length === 0, `a stovetop-only kitchen is never given an oven recipe${ovenLeaks.length ? '\n   ' + ovenLeaks.join('\n   ') : ''}`);
+ok(P.SLOTS.every(sl => stovetopOnly.days.every(d => d.slots[sl])), 'stovetop-only week still fills every slot');
+S.set(st => { st.profile.kitchen = ['stovetop', 'oven']; });
+
 /* ── recipe data integrity ────────────────────────────────────── */
 let bad = [];
 for (const r of R.RECIPES) {

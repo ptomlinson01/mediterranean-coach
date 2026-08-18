@@ -84,7 +84,7 @@ export const RECIPES = [
   },
   {
     id: 'b-cottage-fruit', name: 'Cottage Cheese & Fruit',
-    meal: ['breakfast', 'snack'], effort: 'none', minutes: 3, servings: 1,
+    meal: ['snack'], effort: 'none', minutes: 3, servings: 1,
     kcal: 255, protein: 28, carbs: 24, fat: 5, fiber: 2,
     tags: ['no-cook', 'high-protein'],
     ing: [
@@ -92,13 +92,14 @@ export const RECIPES = [
       { n: 'Pineapple or peaches', q: 1, u: 'cup', a: 'produce' }
     ],
     steps: ['Bowl. Spoon. Done.'],
-    why: 'The best protein-per-calorie item in the whole app. Use it on days the plan says you are running short.'
+    why: 'The best protein-per-calorie item in the app, but it turns fast — buy it the day you plan to eat it rather than keeping it on hand.'
   },
   {
     id: 'b-egg-muffins', name: 'Egg Muffins',
     meal: ['breakfast'], effort: 'project', minutes: 35, servings: 6, batch: true,
     kcal: 275, protein: 24, carbs: 8, fat: 16, fiber: 2,
     tags: ['batch', 'prep-ahead', 'high-protein', 'portable'],
+    needs: ['oven'],
     ing: [
       { n: 'Eggs', q: 12, u: 'large', a: 'dairy' },
       { n: 'Bell pepper', q: 1, u: 'large', a: 'produce' },
@@ -139,25 +140,59 @@ export const RECIPES = [
       { n: 'Eggs', q: 2, u: 'large', a: 'dairy' },
       { n: 'Whole wheat bread', q: 2, u: 'slices', a: 'bakery' },
       { n: 'Avocado', q: 0.5, u: 'medium', a: 'produce' },
-      { n: 'Cherry tomatoes', q: 0.5, u: 'cup', a: 'produce' },
+      { n: 'Cucumber', q: 1, u: 'cup', a: 'produce' },
       { n: 'Lemon', q: 0.25, u: 'whole', a: 'produce' }
     ],
-    steps: ['Toast hard. Mash the avocado onto it with lemon and salt.', 'Two eggs fried or poached on top. Tomatoes on the side.']
+    steps: ['Toast hard. Mash the avocado onto it with lemon and salt.', 'Two eggs fried or poached on top. Cucumber on the side.']
+  },
+
+  {
+    id: 'b-pb-toast-eggs', name: 'Peanut Butter Toast & Eggs',
+    meal: ['breakfast'], effort: 'quick', minutes: 8, servings: 1,
+    kcal: 420, protein: 26, carbs: 34, fat: 20, fiber: 6,
+    tags: ['quick', 'high-protein'],
+    ing: [
+      { n: 'Eggs', q: 2, u: 'large', a: 'dairy' },
+      { n: 'Whole wheat bread', q: 2, u: 'slices', a: 'bakery' },
+      { n: 'Peanut butter', q: 1, u: 'tbsp', a: 'pantry' },
+      { n: 'Banana', q: 0.5, u: 'medium', a: 'produce' }
+    ],
+    steps: ['Toast, peanut butter, banana sliced over one slice.', 'Two eggs however you like them alongside.'],
+    why: 'The peanut butter is what makes this hold until lunch. Toast on its own will not.'
+  },
+
+  {
+    id: 'b-overnight-oats', name: 'Overnight Oats',
+    meal: ['breakfast'], effort: 'none', minutes: 5, servings: 1,
+    kcal: 405, protein: 24, carbs: 50, fat: 12, fiber: 8,
+    tags: ['no-cook', 'prep-ahead', 'portable', 'high-fiber'],
+    ing: [
+      { n: 'Old-fashioned oats', q: 0.5, u: 'cup', a: 'pantry' },
+      { n: 'Plain Greek yogurt', q: 0.5, u: 'cup', a: 'dairy' },
+      { n: 'Milk', q: 0.5, u: 'cup', a: 'dairy' },
+      { n: 'Peanut butter', q: 1, u: 'tbsp', a: 'pantry' },
+      { n: 'Banana', q: 0.5, u: 'medium', a: 'produce' },
+      { n: 'Cinnamon', q: 0.25, u: 'tsp', a: 'pantry' }
+    ],
+    steps: [
+      'Everything except the banana into a jar the night before. Stir, lid on, refrigerate.',
+      'Banana sliced in when you eat it.',
+      'Make three jars at once on Sunday and the week gets easier.'
+    ],
+    why: 'Built the night before, which is the only reason it survives a six o\'clock alarm. Eat it cold, in the truck if you have to.'
   },
   {
-    id: 'b-smoothie', name: 'Berry Protein Smoothie',
-    meal: ['breakfast'], effort: 'none', minutes: 4, servings: 1,
-    kcal: 340, protein: 32, carbs: 34, fat: 8, fiber: 6,
+    id: 'b-yogurt-granola', name: 'Yogurt & Granola Parfait',
+    meal: ['breakfast'], effort: 'none', minutes: 3, servings: 1,
+    kcal: 350, protein: 26, carbs: 40, fat: 9, fiber: 5,
     tags: ['no-cook', 'high-protein', 'portable'],
     ing: [
-      { n: 'Frozen mixed berries', q: 1, u: 'cup', a: 'frozen' },
-      { n: 'Plain Greek yogurt', q: 0.75, u: 'cup', a: 'dairy' },
-      { n: 'Milk', q: 0.75, u: 'cup', a: 'dairy' },
-      { n: 'Banana', q: 0.5, u: 'medium', a: 'produce' },
-      { n: 'Peanut butter', q: 1, u: 'tsp', a: 'pantry' }
+      { n: 'Plain Greek yogurt', q: 1, u: 'cup', a: 'dairy' },
+      { n: 'Granola', q: 0.33, u: 'cup', a: 'pantry' },
+      { n: 'Blueberries or strawberries', q: 0.75, u: 'cup', a: 'produce' }
     ],
-    steps: ['Everything in the blender, 30 seconds.'],
-    why: 'For mornings where chewing feels like too much. Drink it in the car if you have to.'
+    steps: ['Yogurt, then berries, then granola last so it stays crunchy.'],
+    why: 'Measure the granola. It is the one ingredient here that will quietly double on you — a third of a cup looks small and is about 140 calories.'
   },
 
   /* ─────────────────────────── LUNCH ─────────────────────────── */
@@ -188,9 +223,9 @@ export const RECIPES = [
       { n: 'Romaine lettuce', q: 4, u: 'cups', a: 'produce' },
       { n: 'Caesar dressing', q: 2, u: 'tbsp', a: 'pantry' },
       { n: 'Parmesan, grated', q: 2, u: 'tbsp', a: 'dairy' },
-      { n: 'Cherry tomatoes', q: 1, u: 'cup', a: 'produce' }
+      { n: 'Cucumber', q: 1, u: 'cup', a: 'produce' }
     ],
-    steps: ['Chop the romaine, toss with the dressing first so it coats.', 'Chicken and tomatoes on top, parmesan last.'],
+    steps: ['Chop the romaine, toss with the dressing first so it coats.', 'Chicken and cucumber on top, parmesan last.'],
     why: 'Two tablespoons of dressing, measured. Poured straight from the bottle it is usually five, and that is 200 calories you did not notice.'
   },
   {
@@ -204,7 +239,7 @@ export const RECIPES = [
       { n: 'Swiss cheese', q: 1, u: 'slice', a: 'dairy' },
       { n: 'Mustard', q: 1, u: 'tbsp', a: 'pantry' },
       { n: 'Lettuce', q: 2, u: 'leaves', a: 'produce' },
-      { n: 'Tomato', q: 3, u: 'slices', a: 'produce' }
+      { n: 'Dill pickle chips', q: 6, u: 'slices', a: 'pantry' }
     ],
     steps: ['Mustard, not mayo — that swap alone is 90 calories.', 'Pile the turkey higher than feels normal. That is the point.']
   },
@@ -248,7 +283,7 @@ export const RECIPES = [
       { n: 'Hard-boiled eggs', q: 3, u: 'large', a: 'dairy' },
       { n: 'Mixed salad greens', q: 4, u: 'cups', a: 'produce' },
       { n: 'Cucumber', q: 1, u: 'cup', a: 'produce' },
-      { n: 'Cherry tomatoes', q: 1, u: 'cup', a: 'produce' },
+      { n: 'Bell pepper', q: 1, u: 'medium', a: 'produce' },
       { n: 'Shredded cheddar', q: 0.25, u: 'cup', a: 'dairy' },
       { n: 'Olive oil', q: 1, u: 'tbsp', a: 'pantry' },
       { n: 'Red wine vinegar', q: 1, u: 'tbsp', a: 'pantry' }
@@ -331,12 +366,34 @@ export const RECIPES = [
     steps: ['Frozen cooked shrimp thaw under cold running water in four minutes.', 'Everything on a plate, cocktail sauce and lemon over.']
   },
 
+  {
+    id: 'l-chicken-bean-bowl', name: 'Chicken & Refried Bean Bowl',
+    meal: ['lunch', 'dinner'], effort: 'none', minutes: 8, servings: 1,
+    kcal: 460, protein: 38, carbs: 46, fat: 14, fiber: 11,
+    tags: ['no-cook', 'high-protein', 'emergency', 'uses-leftovers'],
+    ing: [
+      { n: 'Rotisserie chicken', q: 5, u: 'oz', a: 'protein' },
+      { n: 'Refried beans, canned', q: 0.75, u: 'cup', a: 'pantry' },
+      { n: 'Cooked rice', q: 0.5, u: 'cup', a: 'pantry' },
+      { n: 'Shredded cheddar', q: 0.25, u: 'cup', a: 'dairy' },
+      { n: 'Salsa', q: 3, u: 'tbsp', a: 'pantry' },
+      { n: 'Romaine lettuce', q: 1, u: 'cup', a: 'produce' }
+    ],
+    steps: [
+      'Refried beans warmed in the microwave, 60 seconds, stirred once.',
+      'Beans and rice down first, chicken over, cheese on while it is still hot.',
+      'Salsa and lettuce on top last so it stays cold and crunchy.'
+    ],
+    why: 'Eleven grams of fiber, thirty-eight of protein, and the only thing that gets heated is a bowl of beans.'
+  },
+
   /* ─────────────────────────── DINNER ────────────────────────── */
   {
     id: 'd-sheetpan-thighs', name: 'Sheet-Pan Chicken Thighs & Vegetables',
     meal: ['dinner'], effort: 'project', minutes: 45, servings: 4, batch: true,
     kcal: 510, protein: 44, carbs: 30, fat: 24, fiber: 6,
     tags: ['batch', 'one-pan', 'high-protein'],
+    needs: ['oven'],
     ing: [
       { n: 'Chicken thighs, boneless skinless', q: 2, u: 'lb', a: 'protein' },
       { n: 'Baby potatoes', q: 1.5, u: 'lb', a: 'produce' },
@@ -376,6 +433,7 @@ export const RECIPES = [
     meal: ['dinner'], effort: 'standard', minutes: 30, servings: 1,
     kcal: 510, protein: 42, carbs: 40, fat: 20, fiber: 6,
     tags: ['fish', 'high-protein'],
+    needs: ['oven'],
     ing: [
       { n: 'Salmon fillet', q: 6, u: 'oz', a: 'protein' },
       { n: 'Cooked rice', q: 0.75, u: 'cup', a: 'pantry' },
@@ -418,6 +476,7 @@ export const RECIPES = [
     meal: ['dinner'], effort: 'standard', minutes: 35, servings: 2,
     kcal: 490, protein: 44, carbs: 34, fat: 20, fiber: 6,
     tags: ['high-protein'],
+    needs: ['oven'],
     ing: [
       { n: 'Pork chops, boneless', q: 12, u: 'oz', a: 'protein' },
       { n: 'Baby potatoes', q: 12, u: 'oz', a: 'produce' },
@@ -484,6 +543,7 @@ export const RECIPES = [
     meal: ['dinner'], effort: 'project', minutes: 75, servings: 5, batch: true,
     kcal: 495, protein: 46, carbs: 28, fat: 22, fiber: 6,
     tags: ['batch', 'one-pan', 'high-protein'],
+    needs: ['oven'],
     ing: [
       { n: 'Whole chicken', q: 1, u: 'whole', a: 'protein' },
       { n: 'Baby potatoes', q: 1.5, u: 'lb', a: 'produce' },
@@ -511,7 +571,7 @@ export const RECIPES = [
       { n: 'Hamburger bun, whole wheat', q: 1, u: 'whole', a: 'bakery' },
       { n: 'Cheddar cheese', q: 1, u: 'slice', a: 'dairy' },
       { n: 'Mixed salad greens', q: 3, u: 'cups', a: 'produce' },
-      { n: 'Tomato', q: 3, u: 'slices', a: 'produce' },
+      { n: 'Dill pickle chips', q: 6, u: 'slices', a: 'pantry' },
       { n: 'Red onion', q: 0.25, u: 'small', a: 'produce' },
       { n: 'Olive oil', q: 2, u: 'tsp', a: 'pantry' },
       { n: 'Red wine vinegar', q: 1, u: 'tbsp', a: 'pantry' }
@@ -561,7 +621,7 @@ export const RECIPES = [
       { n: 'Rotisserie chicken', q: 6, u: 'oz', a: 'protein' },
       { n: 'Microwave rice pouch', q: 0.75, u: 'pouch', a: 'pantry' },
       { n: 'Bagged salad kit', q: 2, u: 'cups', a: 'produce' },
-      { n: 'Cherry tomatoes', q: 1, u: 'cup', a: 'produce' }
+      { n: 'Baby carrots', q: 1, u: 'cup', a: 'produce' }
     ],
     steps: ['Pull the meat off with your hands. Skin off if you can be bothered, on if you cannot.', 'Rice 90 seconds, salad out of the bag. Plate it and sit down.'],
     why: 'Grabbing a rotisserie chicken on the way home is not cheating. It is a dinner that actually happens, plus two lunches.'
@@ -592,7 +652,7 @@ export const RECIPES = [
       { n: 'Chicken breast', q: 7, u: 'oz', a: 'protein' },
       { n: 'Mixed salad greens', q: 4, u: 'cups', a: 'produce' },
       { n: 'Cucumber', q: 1, u: 'cup', a: 'produce' },
-      { n: 'Cherry tomatoes', q: 1, u: 'cup', a: 'produce' },
+      { n: 'Bell pepper', q: 1, u: 'medium', a: 'produce' },
       { n: 'Avocado', q: 0.33, u: 'medium', a: 'produce' },
       { n: 'Olive oil', q: 2, u: 'tsp', a: 'pantry' },
       { n: 'Red wine vinegar', q: 1, u: 'tbsp', a: 'pantry' }
@@ -631,25 +691,90 @@ export const RECIPES = [
     ],
     why: 'You mentioned you like it, so it is in the rotation on purpose. Lean fish and portioned rice — it fits the numbers without any effort from you at all.'
   },
+
   {
-    id: 'd-pork-loin-veg', name: 'Pork Loin with Roasted Vegetables',
-    meal: ['dinner'], effort: 'project', minutes: 60, servings: 4, batch: true,
-    kcal: 480, protein: 44, carbs: 28, fat: 22, fiber: 6,
-    tags: ['batch', 'one-pan', 'high-protein'],
+    id: 'd-chicken-tacos', name: 'Rotisserie Chicken Tacos',
+    meal: ['dinner'], effort: 'quick', minutes: 12, servings: 1,
+    kcal: 475, protein: 36, carbs: 42, fat: 18, fiber: 10,
+    tags: ['quick', 'high-protein', 'family'],
     ing: [
-      { n: 'Pork loin roast', q: 2, u: 'lb', a: 'protein' },
+      { n: 'Rotisserie chicken', q: 5, u: 'oz', a: 'protein' },
+      { n: 'Corn tortillas', q: 3, u: 'whole', a: 'bakery' },
+      { n: 'Refried beans, canned', q: 0.5, u: 'cup', a: 'pantry' },
+      { n: 'Shredded cheddar', q: 0.25, u: 'cup', a: 'dairy' },
+      { n: 'Salsa', q: 3, u: 'tbsp', a: 'pantry' },
+      { n: 'Romaine lettuce', q: 1, u: 'cup', a: 'produce' },
+      { n: 'Lime', q: 0.5, u: 'whole', a: 'produce' }
+    ],
+    steps: [
+      'Warm the tortillas straight on a dry pan, 20 seconds a side. That is the whole difference between good tacos and sad ones.',
+      'Beans warmed and spread on each one, then chicken, cheese, salsa, lettuce.',
+      'Lime squeezed over at the end.'
+    ],
+    why: 'Corn tortillas rather than flour: three of them is about 200 calories against 300 for one large flour wrap.'
+  },
+  {
+    id: 'd-chicken-quesadilla', name: 'Chicken Quesadilla & Salad',
+    meal: ['dinner'], effort: 'quick', minutes: 15, servings: 1,
+    kcal: 475, protein: 38, carbs: 36, fat: 20, fiber: 7,
+    tags: ['quick', 'high-protein', 'family'],
+    ing: [
+      { n: 'Rotisserie chicken', q: 5, u: 'oz', a: 'protein' },
+      { n: 'Whole wheat tortilla, large', q: 1, u: 'whole', a: 'bakery' },
+      { n: 'Shredded cheddar', q: 0.33, u: 'cup', a: 'dairy' },
+      { n: 'Salsa', q: 3, u: 'tbsp', a: 'pantry' },
+      { n: 'Mixed salad greens', q: 3, u: 'cups', a: 'produce' },
+      { n: 'Olive oil', q: 2, u: 'tsp', a: 'pantry' },
+      { n: 'Red wine vinegar', q: 1, u: 'tbsp', a: 'pantry' }
+    ],
+    steps: [
+      'Chicken and cheese over half the tortilla, fold it, dry pan, 3 minutes a side under a little pressure.',
+      'Let it sit a minute before cutting or the filling runs straight out.',
+      'Dressed salad on the side, not underneath.'
+    ]
+  },
+  {
+    id: 'd-bean-tostadas', name: 'Refried Bean & Cheese Tostadas',
+    meal: ['dinner', 'lunch'], effort: 'quick', minutes: 15, servings: 1,
+    kcal: 450, protein: 24, carbs: 48, fat: 18, fiber: 13,
+    tags: ['quick', 'vegetarian', 'high-fiber', 'pantry-only'],
+    ing: [
+      { n: 'Refried beans, canned', q: 1, u: 'cup', a: 'pantry' },
+      { n: 'Corn tortillas', q: 3, u: 'whole', a: 'bakery' },
+      { n: 'Shredded cheddar', q: 0.33, u: 'cup', a: 'dairy' },
+      { n: 'Romaine lettuce', q: 1, u: 'cup', a: 'produce' },
+      { n: 'Salsa', q: 3, u: 'tbsp', a: 'pantry' },
+      { n: 'Avocado', q: 0.33, u: 'medium', a: 'produce' },
+      { n: 'Olive oil', q: 1, u: 'tsp', a: 'pantry' }
+    ],
+    steps: [
+      'Tortillas crisped in a dry pan until they stop bending.',
+      'Beans warmed and spread thick, cheese over while they are still hot.',
+      'Lettuce, salsa and sliced avocado on top.'
+    ],
+    why: 'Thirteen grams of fiber and no meat at all. Worth having once or twice a week purely for what it does to your cholesterol.'
+  },
+  {
+    id: 'd-rotisserie-veg', name: 'Rotisserie Chicken & Roasted Vegetables',
+    meal: ['dinner'], effort: 'project', minutes: 40, servings: 4, batch: true,
+    kcal: 475, protein: 44, carbs: 30, fat: 20, fiber: 7,
+    tags: ['batch', 'one-pan', 'high-protein'],
+    needs: ['oven'],
+    ing: [
+      { n: 'Rotisserie chicken', q: 2, u: 'whole', a: 'protein' },
       { n: 'Baby potatoes', q: 1.5, u: 'lb', a: 'produce' },
+      { n: 'Broccoli', q: 2, u: 'heads', a: 'produce' },
       { n: 'Carrots', q: 5, u: 'medium', a: 'produce' },
-      { n: 'Onion', q: 2, u: 'large', a: 'produce' },
-      { n: 'Olive oil', q: 2, u: 'tbsp', a: 'pantry' },
+      { n: 'Olive oil', q: 3, u: 'tbsp', a: 'pantry' },
       { n: 'Garlic powder & paprika', q: 1, u: 'tbsp', a: 'pantry' }
     ],
     steps: [
-      'Oven to 400°F. Sear the loin on all sides in a hot pan first — 6 minutes total, and worth it.',
-      'Onto a sheet pan on the vegetables, roast 40 minutes until it reads 145°F.',
-      'Rest 10 minutes before slicing, or all the juice runs out onto the board.'
+      'Two birds on the way home. Strip every scrap of meat off both while the oven heats — ten minutes with your hands, and it is the only real work here.',
+      'Vegetables cut, oiled, seasoned, 425°F for 30 minutes.',
+      'Warm the chicken through at the very end rather than roasting it, or it dries out.',
+      'Divide into four containers straight away, while you are still standing there.'
     ],
-    why: 'Pork loin is one of the cheapest lean proteins in the store and slices cold into sandwiches all week.'
+    why: 'You already buy the chickens. This turns a habit you already have into four dinners, without you learning to cook anything new.'
   },
 
   /* ─────────────────────────── SNACKS ────────────────────────── */
@@ -716,19 +841,6 @@ export const RECIPES = [
       { n: 'Baby carrots', q: 1.5, u: 'cups', a: 'produce' }
     ],
     steps: ['Buy the baby carrots already cut. Whole carrots you have to peel do not get eaten.']
-  },
-  {
-    id: 's-cottage-snack', name: 'Cottage Cheese & Tomatoes',
-    meal: ['snack'], effort: 'none', minutes: 3, servings: 1,
-    kcal: 170, protein: 20, carbs: 14, fat: 4, fiber: 2,
-    tags: ['no-cook', 'high-protein'],
-    ing: [
-      { n: 'Cottage cheese, low-fat', q: 0.75, u: 'cup', a: 'dairy' },
-      { n: 'Cherry tomatoes', q: 1, u: 'cup', a: 'produce' },
-      { n: 'Olive oil', q: 1, u: 'tsp', a: 'pantry' }
-    ],
-    steps: ['Tomatoes over the cottage cheese, oil, a lot of black pepper.'],
-    why: 'Twenty grams of protein for 170 calories. Reach for this one on the days the app says you are behind.'
   },
   {
     id: 's-jerky', name: 'Beef Jerky',

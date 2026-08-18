@@ -129,7 +129,7 @@ sw.js                 offline cache (never touches the API)
 make_icons.py         regenerates the icons: python make_icons.py
 js/
   engine.js           BMR/TDEE, capped deficit, protein floor, day archetypes
-  recipes.js          45 everyday recipes, each tagged with an effort tier
+  recipes.js          50 everyday recipes, each tagged with an effort tier
   planner.js          week building, leftover routing, portion sizing, groceries
   store.js            all state, localStorage only
   context.js          the context file, the system prompt, the twelve patterns
@@ -155,6 +155,12 @@ test/
   200 lb man comes to roughly 1,450 kcal a day against a target near 1,950. Rather than
   invent bigger recipes, the planner serves more of the same food and tells you so
   ("one and a half"). Without this the app would quietly under-feed you by 500 kcal a day.
+- **Equipment is honored.** A recipe declares what it needs (`needs: ['oven']`) and is
+  never planned into a kitchen that does not have it. Onboarding used to ask and then
+  ignore the answer, which is how a household with no blender got handed a smoothie.
+- **Standing food rules live in the recipe data, not in a filter.** No raw tomatoes
+  anywhere (cooked and canned are fine), no pork loin, cottage cheese is snack-only and
+  never paired with tomatoes. Tests fail if any of these come back.
 - **Only normal groceries.** A regression test fails the build if a recipe sneaks in a
   British term (courgette, tinned, rocket) or a specialty item (farro, harissa, tahini).
   The bar is: could you buy this at H-E-B without asking anyone where it is.
