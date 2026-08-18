@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Mediterranean Coach</title>
+<meta name="description" content="A Mediterranean-diet weight-loss coach that plans around the hours you actually work.">
+<meta name="theme-color" content="#0E3B33" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F4ED" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Med Coach">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="hdr-text">
+    <div class="title" id="hdrTitle">Today</div>
+    <div class="sub" id="hdrSub"></div>
+  </div>
+</header>
+
+<main>
+  <section id="view-onboard" class="view on"><div id="onboardHost"></div></section>
+  <section id="view-today"   class="view"><div id="todayHost"></div></section>
+  <section id="view-week"    class="view"><div id="weekHost"></div></section>
+  <section id="view-recipes" class="view"><div id="recipesHost"></div></section>
+  <section id="view-coach"   class="view"><div id="coachHost"></div></section>
+  <section id="view-me"      class="view"><div id="meHost"></div></section>
+</main>
+
+<nav class="tabbar" id="tabbar" hidden>
+  <button data-tab="today"   class="on"><span>☀️</span>Today</button>
+  <button data-tab="week"><span>🗓️</span>Week</button>
+  <button data-tab="recipes"><span>📖</span>Recipes</button>
+  <button data-tab="coach"><span>💬</span>Coach</button>
+  <button data-tab="me"><span>👤</span>Me</button>
+</nav>
+
+<div class="sheet-backdrop" id="sheet"><div class="sheet" id="sheetBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script type="module" src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
+</body>
+</html>
