@@ -48,38 +48,38 @@ exists — paste it into the Claude app, ChatGPT, or whatever you use in five ye
 
 ## Getting it onto your iPhone
 
-### Option A — GitHub Pages (recommended)
+It is already live here:
 
-Gives you HTTPS, which is what unlocks proper offline support and a real home-screen icon.
+**https://ptomlinson01.github.io/mediterranean-coach/**
+
+On the iPhone: open that link **in Safari** (not Chrome), tap **Share**, tap
+**Add to Home Screen**, tap **Add**. Done — it behaves like a normal app from then on,
+full screen, no browser bars, and works with no signal once it has loaded once.
+
+### Pushing changes
+
+Edit the files, then:
 
 ```bash
-cd mediterranean-coach
-git init && git add -A && git commit -m "Mediterranean Coach"
-gh repo create mediterranean-coach --private --source=. --push
+cd C:\Users\ptomlinson\Documents\DEV\SaaS\mediterranean-coach
+git add -A && git commit -m "what changed" && git push
 ```
 
-Then in the repo: **Settings → Pages → Source: deploy from branch → `main` / root**.
-A minute later open `https://<you>.github.io/mediterranean-coach/` in **Safari** on the
-iPhone → **Share** → **Add to Home Screen**.
+Live again in about a minute. On the phone, close the app fully (swipe it away in the app
+switcher) and reopen it to pick up the new version — the offline cache serves the old one
+until you do.
 
-> A private repo needs a paid GitHub plan for Pages. If yours is free, either make the
-> repo public (there is nothing secret in it — your data never leaves your phone and the
-> API key is never committed) or use Option B.
+### Running it locally instead
 
-### Option B — off your PC, over the house wifi
+To try changes before pushing:
 
 ```bash
-cd mediterranean-coach
+cd C:\Users\ptomlinson\Documents\DEV\SaaS\mediterranean-coach
 python -m http.server 8777
 ```
 
-Find your PC's IP (`ipconfig`), then open `http://<that-ip>:8777` on the iPhone. Works
-fine, but only at home, and iOS will not register the offline service worker over plain
-HTTP.
-
-### Option C — anywhere that serves static files
-
-Netlify Drop, Cloudflare Pages, Vercel — drag the folder in. It is plain static files.
+Then `http://localhost:8777` on the PC, or `http://<your-pc-ip>:8777` from the phone on
+the same wifi.
 
 ---
 
