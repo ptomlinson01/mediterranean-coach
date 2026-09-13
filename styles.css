@@ -450,3 +450,54 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ── the questionnaire and the path ───────────────────────────── */
+
+.qz { margin-bottom: 18px; }
+.qz .fld-label { margin-bottom: 8px; }
+.qz .chips { margin-bottom: 0; }
+.qz input.time { width: auto; min-width: 140px; }
+.btn.block { width: 100%; margin-top: 8px; }
+.card.quiet { padding-block: 12px; }
+.card.quiet h3 { margin-top: 0; margin-bottom: 2px; }
+
+.path-strip {
+  appearance: none; font: inherit; cursor: pointer; text-align: left;
+  display: flex; flex-wrap: wrap; gap: 6px 14px; width: 100%;
+  background: var(--card); color: var(--muted); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 14px; margin-bottom: 12px; font-size: 14px;
+}
+.path-strip b { color: var(--ink); font-weight: 600; }
+
+.path-head { border-color: var(--accent); }
+.path-headline { font-size: 17px; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
+
+.energy {
+  position: relative; height: 22px; border-radius: 6px; overflow: hidden;
+  background: color-mix(in srgb, var(--line) 60%, transparent); margin: 8px 0 10px;
+}
+.energy i, .energy-key i { display: block; position: absolute; top: 0; bottom: 0; }
+.energy i.grog { background: color-mix(in srgb, var(--muted) 35%, transparent); }
+.energy i.peak { background: var(--accent); }
+.energy i.dip  { background: var(--warm); }
+.energy i.wind { background: color-mix(in srgb, var(--ink) 55%, transparent); }
+.energy-key { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.energy-key span { display: flex; align-items: center; gap: 6px; }
+.energy-key i { position: static; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+.path-sec h3 { margin-top: 0; }
+.path-sec ul { margin: 10px 0 0; padding-left: 18px; }
+.path-sec li { font-size: 15px; color: var(--muted); margin-bottom: 6px; line-height: 1.45; }
+.path-times { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.path-times div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 4px; }
+.path-times b { display: block; font-size: 18px; font-weight: 700; }
+.path-times span { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+.dayplan { list-style: none; margin: 8px 0 0; padding: 0; }
+.dayplan li { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.dayplan li:first-child { border-top: 0; }
+.dayplan time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; line-height: 1.35; }
+.dayplan b { display: block; font-size: 15px; }
+.dayplan p { font-size: 14px; color: var(--muted); margin: 2px 0 0; line-height: 1.45; }
+
+.stats.three { grid-template-columns: repeat(3, 1fr); }

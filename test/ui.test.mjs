@@ -63,6 +63,40 @@ await step('walk through onboarding', async () => {
   await page.screenshot({ path: `${SHOT}/04-problems.png` });
   await page.click('[data-next]');                       // -> limits
   await page.fill('[data-field="dislikes"]', 'sardines');
+  await page.click('[data-next]');                       // -> questionnaire: sleep
+  await page.waitForSelector('[data-section="sleep"]');
+});
+
+await step('questionnaire refuses to advance with a question unanswered', async () => {
+  await page.click('[data-next]');
+  await page.waitForTimeout(150);
+  if (!(await page.isVisible('[data-section="sleep"]'))) throw new Error('advanced past an unanswered section');
+});
+
+await step('questionnaire: one tap per question, four pages', async () => {
+  const pick = async (id, v) => page.click(`.chip.q[data-qid="${id}"][data-v="${v}"]`);
+  await page.fill('input[data-q="wakeWork"]', '06:00');
+  await page.fill('input[data-q="bedWork"]', '23:30');
+  await pick('freeWake', '6-7'); await pick('alarm', 'never'); await pick('morning', 'groggy'); await pick('lastHour', 'screen');
+  await page.screenshot({ path: `${SHOT}/04b-q-sleep.png`, fullPage: true });
+  await page.click('[data-next]');                       // -> energy
+  await page.waitForSelector('[data-section="energy"]');
+  await pick('sharpest', 'mid'); await pick('dip', '14'); await pick('hungry', 'evening');
+  await page.click('[data-next]');                       // -> fitness
+  await page.waitForSelector('[data-section="fitness"]');
+  await pick('fitNow', 'walk'); await pick('fitWould', 'home'); await pick('fitWould', 'walk');
+  await pick('fitMin', '30'); await pick('fitWhen', 'after');
+  await page.click('[data-next]');                       // -> food
+  await page.waitForSelector('[data-section="food"]');
+  await pick('breakfast', 'coffee'); await pick('bigMeal', 'either');
+  await pick('repeat', 'eggs'); await pick('repeat', 'chicken'); await pick('alcohol', 'nightly1');
+  await page.click('[data-next]');                       // -> your path
+  await page.waitForSelector('.path-headline', { timeout: 5000 });
+  const head = await page.textContent('.path-headline');
+  if (!/6am/.test(head)) throw new Error(`path headline did not carry the wake time: ${head}`);
+  const windows = await page.$$('.dayplan li');
+  if (windows.length !== 8) throw new Error(`expected 8 windows in the day plan, got ${windows.length}`);
+  await page.screenshot({ path: `${SHOT}/04c-path.png`, fullPage: true });
   await page.click('[data-next]');                       // -> results
   await page.waitForSelector('.tgt.big', { timeout: 5000 });
 });
@@ -80,6 +114,18 @@ await step('finish and land on Today', async () => {
   if (!bar) throw new Error('tab bar did not appear');
 });
 await page.screenshot({ path: `${SHOT}/06-today.png`, fullPage: true });
+
+await step('today shows the path strip and a waist card', async () => {
+  const strip = await page.textContent('.path-strip');
+  if (!/Kitchen closes/.test(strip)) throw new Error('path strip missing');
+  await page.fill('#waistInput', '42.5');
+  await page.click('#waistSave');
+  await page.waitForTimeout(200);
+  const val = await page.inputValue('#waistInput');
+  if (val !== '42.5') throw new Error(`waist did not persist on the card: "${val}"`);
+  const heading = await page.textContent('#waistInput >> xpath=../../h3');
+  if (/due/.test(heading)) throw new Error('waist card still says due after logging');
+});
 
 await step('mark a meal eaten updates the calorie bar', async () => {
   const before = await page.textContent('.metric b');
@@ -158,11 +204,19 @@ await page.click('[data-close]');
 
 await step('me tab and the context file', async () => {
   await page.click('[data-tab="me"]');
+  await page.waitForSelector('#myPath');
+  const row = await page.textContent('#myPath');
+  if (!/sleep/.test(row)) throw new Error('My path row does not show as taken');
+  await page.click('#myPath');
+  await page.waitForSelector('#retakePath');
+  await page.screenshot({ path: `${SHOT}/09b-my-path.png`, fullPage: true });
+  await page.click('[data-close]');
+  await page.waitForTimeout(200);
   await page.waitForSelector('.stats', { timeout: 3000 });
   await page.click('#editContext');
   await page.waitForSelector('pre.ctx', { timeout: 3000 });
   const ctxText = await page.textContent('pre.ctx');
-  for (const need of ['CONTEXT FILE', 'Long days wreck the plan', 'Brutal', 'sardines']) {
+  for (const need of ['CONTEXT FILE', 'Long days wreck the plan', 'Brutal', 'sardines', 'Their path', 'Kitchen closes 8pm', 'Waist at the navel: 42.5', 'The day in order']) {
     if (!ctxText.includes(need)) throw new Error(`context missing "${need}"`);
   }
   if (/undefined|NaN/.test(ctxText)) throw new Error('context contains undefined/NaN');

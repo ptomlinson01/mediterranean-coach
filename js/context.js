@@ -19,10 +19,11 @@
    the situations that actually recur, rather than a blank chat box at 7pm when
    you are too tired to write a good question. */
 
-import { get, day, key, hoursOn, trend, trendDelta, weights, adherence, DAY_LONG } from './store.js';
+import { get, day, key, hoursOn, trend, trendDelta, weights, adherence, waists, waistNow, waistDelta, DAY_LONG } from './store.js';
 import { targets, dayType, ACTIVITY, weeklyHours, fmtDate } from './engine.js';
 import { BY_ID, recipeIndex } from './recipes.js';
 import { SLOTS, SLOT_LABEL, served } from './planner.js';
+import { derivePath, pathMarkdown } from './path.js';
 
 /* The problems worth naming. Chosen during onboarding, and they change the
    coaching more than any macro number does — a person who eats fine all day and
@@ -58,11 +59,19 @@ export function buildContext() {
   const delta = trendDelta();
   const adh = adherence();
   const recent = weights().slice(-6);
+  const waist = waistNow();
+  const wd = waistDelta();
+  const waistLine = waist
+    ? `- Waist at the navel: ${waist} in${wd !== null ? ` (${wd < 0 ? `down ${Math.abs(wd)}` : wd > 0 ? `up ${wd}` : 'unchanged'} since first measured)` : ''}. ${p.waistGoal ? `Goal ${p.waistGoal} in.` : 'Under 40 in is where the health risk drops.'} The waist is the number they care about; when weight stalls but waist falls, say so — that is fat leaving and muscle staying.`
+    : '- Waist not measured yet. Encourage a weekly tape at the navel; it is a better witness than the scale once they are lifting.';
 
   const lost = Math.round((p.startWeight - tr) * 10) / 10;
   const problems = (s.telos.problems || [])
     .map(id => PROBLEMS.find(x => x.id === id))
     .filter(Boolean);
+
+  const path = derivePath(s.path?.answers, p);
+  const pathBlock = path ? pathMarkdown(path) : '## Their path\nQuestionnaire not taken yet — no path to honour.\n';
 
   const schedule = p.workHours.map((h, i) => `${DAY_LONG[i].slice(0, 3)} ${h}h`).join(' · ');
 
@@ -102,6 +111,7 @@ Generated ${new Date().toLocaleString()}. This describes the person you are advi
 - Started at ${p.startWeight} lb. Trend weight now ${tr} lb. Goal ${p.goalWeight} lb.
 - ${lost >= 0 ? `Down ${lost} lb` : `Up ${Math.abs(lost)} lb`} since starting${delta !== null ? `; the 14-day trend is moving ${delta < 0 ? `down ${Math.abs(delta)} lb` : delta > 0 ? `up ${delta} lb` : 'flat'}` : ''}.
 - Activity outside work: ${ACTIVITY[p.activity]?.label} — ${ACTIVITY[p.activity]?.hint}.
+${waistLine}
 
 ## Mission
 ${s.telos.mission || `Lose ${t.toLose} lb on a Mediterranean pattern of eating, without it costing time that is not available, and keep the muscle.`}
@@ -124,6 +134,7 @@ ${t.floored ? '- The target sits at the safety floor; do not suggest eating less
 - Willing to genuinely cook about ${p.cookNights} nights a week. Cooking confidence: ${p.skill}.
 - Kitchen: ${(p.kitchen || []).join(', ') || 'basic'}.
 
+${pathBlock}
 ## Today — ${DAY_LONG[new Date().getDay()]}, ${k}
 - Working ${hrs} hours. This is a ${type.label.toUpperCase()}.
 - The rule for this kind of day: ${type.rule}
@@ -144,6 +155,7 @@ ${s.telos.directives || '(none set)'}
 
 ## Recent weigh-ins
 ${recent.length ? recent.map(w => `- ${w.date}: ${w.weight} lb`).join('\n') : '- none logged yet'}
+${waists().filter(w => w.date !== 'start').length ? `\n## Waist measurements\n${waists().slice(-6).map(w => `- ${w.date}: ${w.waist} in`).join('\n')}` : ''}
 ${adh !== null ? `\n## Adherence\nAbout ${adh}% of planned meals ticked off over the last two weeks.` : ''}
 
 ## The full week as planned
@@ -166,6 +178,7 @@ ${recipeIndex()}
 - Lead with the actual answer in the first sentence. They are reading this on a phone, often tired, often standing up.
 - Short. Bullets over paragraphs. Rarely more than 150 words unless they explicitly ask for a full plan.
 - Talk like a knowledgeable friend who has done this for twenty years: direct, warm, specific, unhurried. No hype, no exclamation marks, no "amazing", no emoji unless they use them first.
+- Honour their path where one exists: the kitchen-closes time, which meal is the big one, the anchor proteins, the wake time, and the strength sessions. If they ask for food after the kitchen has closed, say so plainly and offer the smallest thing that ends it.
 - Obey today's day type. Twelve hours of work means you do not suggest cooking — you suggest assembly. A day off means you push them to batch cook.
 - Respect the calorie and protein targets, and give a rough calorie figure whenever you suggest food so they can decide for themselves. Say "roughly 450 calories", never "451 calories".
 - The eating pattern is: vegetables at the centre of the plate, olive oil as the main fat, chicken and fish more often than red meat, beans and whole grains, fruit for dessert. That is the whole thing. It is not low-carb, not "clean eating", and not a list of banned foods.
@@ -232,6 +245,14 @@ export const PATTERNS = [
   {
     id: 'swap-food', icon: '🔁', label: 'I do not want this meal',
     prompt: 'I do not fancy what is planned for my next meal. Suggest two alternatives that fit the same calorie and protein slot and the same effort level for today.'
+  },
+  {
+    id: 'slept-badly', icon: '🥱', label: 'I slept badly',
+    prompt: 'I slept badly last night. Tell me what today is going to feel like, what I am likely to crave and when, and exactly how to eat and move today so a short night does not turn into a bad day. Be specific about times.'
+  },
+  {
+    id: 'train-today', icon: '🏋️', label: 'When do I train today?',
+    prompt: 'Given my hours today, my energy peaks and my path, when should I train today and what should the session be? One answer, with the time, and what to eat around it.'
   },
   {
     id: 'explain-why', icon: '❓', label: 'Explain my numbers',

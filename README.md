@@ -46,7 +46,21 @@ Tap the hours button on Today whenever reality disagrees with the plan. A day th
 into fourteen hours re-tunes every meal you have not eaten yet, and leaves alone the ones
 you have.
 
-**2. The personal-context method (after Daniel Miessler).**
+**2. Do not fight your energy (after Rise).**
+Seventeen one-tap questions — how you sleep, when you are sharp, when you slump, what
+training you would honestly do, how your hunger behaves, how much you drink — produce
+a **path**: a wake time to hold seven days a week, a bedtime worked back from a sleep
+need, a *kitchen-closes* time, a last coffee, two strength sessions placed inside an
+energy peak rather than wherever the calendar has a hole, which meal is the big one,
+and the day laid out in order (groggy start → morning peak → slump → second wind →
+kitchen closed → wind down) with what each window is for. It is shown on Me → My path,
+summarised on Today, and written into the context file so the coach plans around it.
+Retake it any time.
+
+The waist gets measured too — weekly, at the navel — because once you are lifting the
+scale stops telling the truth and the tape does not.
+
+**3. The personal-context method (after Daniel Miessler).**
 The AI coach is never asked to be clever from a cold start. There is one explicit,
 human-readable **context file** — who you are, your mission, the problems in your way,
 your targets and why they are set there, your work pattern, today's plan, what you have
@@ -132,11 +146,15 @@ js/
   recipes.js          50 everyday recipes, each tagged with an effort tier
   planner.js          week building, leftover routing, portion sizing, groceries
   store.js            all state, localStorage only
-  context.js          the context file, the system prompt, the twelve patterns
+  context.js          the context file, the system prompt, the fourteen patterns
+  path.js             the questionnaire and the path it derives (sleep, energy, fitness, food)
   ai.js               streaming Anthropic client
   app.js              screens and wiring
+docs/
+  research-sleep-watch-audit.md   why sleep, the waist and the Watch belong in this app
 test/
   plan.test.mjs       planning-engine regression tests (node, no deps)
+  path.test.mjs       questionnaire / path regression tests (node, no deps)
   ui.test.mjs         end-to-end tests in WebKit at iPhone size
 ```
 
@@ -164,6 +182,13 @@ test/
 - **Only normal groceries.** A regression test fails the build if a recipe sneaks in a
   British term (courgette, tinned, rocket) or a specialty item (farro, harissa, tahini).
   The bar is: could you buy this at H-E-B without asking anyone where it is.
+- **The path's times are all worked back from one number.** Wake time is held; bedtime is
+  wake minus sleep need (7.5 h default, editable in Profile); wind-down is an hour before
+  that; the kitchen closes two and a half hours before it; last coffee is ten hours before
+  it. Change the sleep need and everything moves together.
+- **Strength sessions go in a peak.** The training slot is placed inside the morning peak
+  or the second wind. If the only slot you have is flat or in the slump, the path says so
+  and tells you where the same session would feel easier, rather than pretending.
 - **A batch cook may reappear at most twice.** The supply-chain logic would happily route a
   six-serving braise across six consecutive nights, which is arithmetically perfect and
   completely inedible. Anything over the cap is flagged for the freezer.
@@ -172,6 +197,7 @@ test/
 
 ```bash
 node test/plan.test.mjs                      # engine + planner, no dependencies
+node test/path.test.mjs                      # questionnaire -> path, no dependencies
 
 npm i -D playwright && npx playwright install webkit
 python -m http.server 8777 --bind 127.0.0.1 &

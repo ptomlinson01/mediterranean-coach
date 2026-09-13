@@ -27,7 +27,10 @@ export const DEFAULTS = {
     kitchen: ['stovetop', 'oven'],
     dislikes: '',
     allergies: '',
-    conditions: ''
+    conditions: '',
+    sleepNeedMin: 450,              // 7.5h; the path is measured against this
+    startWaist: null,               // inches at the navel, optional
+    waistGoal: null                 // inches; blank means "under 40"
   },
 
   /* The context layer. This is the part the user owns and edits directly —
@@ -38,13 +41,20 @@ export const DEFAULTS = {
     directives: ''      // free text: standing instructions to the assistant
   },
 
+  /* The questionnaire. The path itself is derived from these plus the
+     profile every time it is needed, so it never goes stale. */
+  path: {
+    answers: null,
+    takenAt: null
+  },
+
   settings: {
     apiKey: '',
     model: 'claude-opus-5',
     effort: 'low'
   },
 
-  // 'YYYY-MM-DD' -> { weight, hours, ate: {slot: true}, note }
+  // 'YYYY-MM-DD' -> { weight, waist, hours, ate: {slot: true}, note }
   log: {},
 
   plan: null,
@@ -129,7 +139,7 @@ export function weekStart(d = new Date()) {
 /* ── the daily log ─────────────────────────────────────────────── */
 
 export function day(k = key()) {
-  return state.log[k] || { weight: null, hours: null, ate: {}, note: '' };
+  return state.log[k] || { weight: null, waist: null, hours: null, ate: {}, note: '' };
 }
 
 export function setDay(k, patch) {
@@ -169,6 +179,41 @@ export function trendDelta() {
   if (!older.length) return null;
   const avg = a => a.reduce((x, y) => x + y.weight, 0) / a.length;
   return Math.round((avg(recent) - avg(older)) * 10) / 10;
+}
+
+/* ── the waist ─────────────────────────────────────────────────── */
+
+/* The scale is a poor witness once someone is lifting: muscle comes on as
+   fat goes and the number sits still. A tape at the navel does not have
+   that problem, and for this audience it is the number they care about. */
+
+export function waists() {
+  const out = Object.entries(state.log)
+    .filter(([, v]) => typeof v.waist === 'number' && v.waist > 0)
+    .map(([d, v]) => ({ date: d, waist: v.waist }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!out.length && state.profile.startWaist) return [{ date: 'start', waist: state.profile.startWaist }];
+  return out;
+}
+
+export function waistNow() {
+  const w = waists();
+  return w.length ? w[w.length - 1].waist : null;
+}
+
+/** Inches lost since the first measurement. Negative is loss. */
+export function waistDelta() {
+  const w = waists();
+  if (w.length < 2) return null;
+  return Math.round((w[w.length - 1].waist - w[0].waist) * 10) / 10;
+}
+
+/** True when the last tape measurement is a week or more old. */
+export function waistDue() {
+  const w = waists().filter(x => x.date !== 'start');
+  if (!w.length) return true;
+  const last = parse(w[w.length - 1].date);
+  return (new Date() - last) / 86400000 >= 6.5;
 }
 
 /** Share of planned meals actually ticked off over the last N days. */

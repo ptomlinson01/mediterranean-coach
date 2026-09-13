@@ -6,6 +6,7 @@ import { RECIPES, BY_ID, AISLE_LABEL, searchRecipes } from './recipes.js';
 import { SLOTS, SLOT_LABEL, buildWeek, swap, retune, groceries, qty, headline, freezerNote, totals, served } from './planner.js';
 import { PROBLEMS, PATTERNS, buildContext, portablePack } from './context.js';
 import { MODELS, ask, testKey, AiError } from './ai.js';
+import { SECTIONS, BY_SECTION, blankAnswers, derivePath, clock, span, CHRONO_LABEL } from './path.js';
 
 /* ── tiny helpers ──────────────────────────────────────────────── */
 
@@ -117,12 +118,21 @@ function render() {
 
 let step = 0;
 let draft = null;
+let obMode = 'full';   // 'full' = first-run setup; 'path' = retaking just the questionnaire
+
+const QUESTION_STEPS = SECTIONS.map(sec => () => questionStep(sec));
 
 function renderOnboard() {
   const s = S.get();
-  draft ||= { profile: structuredClone(s.profile), telos: structuredClone(s.telos) };
+  draft ||= {
+    profile: structuredClone(s.profile),
+    telos: structuredClone(s.telos),
+    path: s.path?.answers ? structuredClone(s.path.answers) : blankAnswers()
+  };
   const p = draft.profile;
-  const steps = [welcomeStep, aboutStep, workStep, kitchenStep, problemsStep, limitsStep, resultStep];
+  const steps = obMode === 'path'
+    ? [...QUESTION_STEPS, pathStep]
+    : [welcomeStep, aboutStep, workStep, kitchenStep, problemsStep, limitsStep, ...QUESTION_STEPS, pathStep, resultStep];
   const total = steps.length;
 
   $('#onboardHost').innerHTML = `
@@ -150,17 +160,25 @@ function renderOnboard() {
     b.classList.toggle('on');
   });
   const finish = host.querySelector('[data-finish]');
-  if (finish) finish.onclick = () => {
+  if (finish && obMode === 'path') finish.onclick = () => {
+    collect();
+    S.set(st => { st.path = { answers: draft.path, takenAt: S.key() }; });
+    draft = null; step = 0; obMode = 'full';
+    show('me');
+    toast('Path updated.');
+  };
+  else if (finish) finish.onclick = () => {
     collect();
     S.set(st => {
       st.profile = draft.profile;
       st.telos = draft.telos;
       st.profile.startWeight = draft.profile.weight;
+      st.path = { answers: draft.path, takenAt: S.key() };
       st.onboarded = true;
       st.plan = buildWeek(draft.profile, targets(draft.profile).kcal, Math.floor(Math.random() * 1e6));
       st.grocery = { checked: [], builtFor: st.plan.start };
     });
-    S.setDay(S.key(), { weight: draft.profile.weight });
+    S.setDay(S.key(), { weight: draft.profile.weight, waist: draft.profile.startWaist || null });
     draft = null;
     show('today');
     toast('Week built. Start with today.');
@@ -170,12 +188,18 @@ function renderOnboard() {
     host.querySelectorAll('[data-field]').forEach(inp => {
       const path = inp.dataset.field;
       const numeric = inp.type === 'number' || inp.type === 'range' || inp.dataset.num !== undefined;
-      let val = numeric ? Number(inp.value) : inp.value;
+      let val = numeric ? (inp.value === '' ? null : Number(inp.value)) : inp.value;
       if (path.startsWith('workHours.')) draft.profile.workHours[Number(path.split('.')[1])] = val;
       else if (path.startsWith('telos.')) draft.telos[path.split('.')[1]] = val;
       else draft.profile[path] = val;
     });
-    if (step === 1) {
+    host.querySelectorAll('input[data-q]').forEach(inp => { draft.path[inp.dataset.q] = inp.value || inp.dataset.def; });
+    const sec = host.querySelector('[data-section]')?.dataset.section;
+    if (sec) {
+      const missing = BY_SECTION(sec).find(q => !q.multi && q.type !== 'time' && !draft.path[q.id]);
+      if (missing) { toast('One more to answer on this page.'); return false; }
+    }
+    if (obMode === 'full' && step === 1) {
       const p2 = draft.profile;
       if (!(p2.age >= 18 && p2.age <= 100)) { toast('Age looks wrong.'); return false; }
       if (!(p2.weight > 60 && p2.weight < 700)) { toast('Current weight looks wrong.'); return false; }
@@ -231,6 +255,7 @@ function aboutStep(p) {
       <label class="fld"><span>Weight now (lb)</span><input data-field="weight" type="number" inputmode="decimal" value="${p.weight}"></label>
       <label class="fld"><span>Goal weight (lb)</span><input data-field="goalWeight" type="number" inputmode="decimal" value="${p.goalWeight}"></label>
     </div>
+    <label class="fld"><span>Waist at the navel, inches (optional but worth it)</span><input data-field="startWaist" type="number" inputmode="decimal" step="0.25" value="${p.startWaist ?? ''}" placeholder="Tape at the navel, relaxed, breathing out"></label>
     <label class="fld"><span>Activity outside work</span>
       <select data-field="activity">
         ${Object.entries(ACTIVITY).map(([k, v]) =>
@@ -316,6 +341,111 @@ function limitsStep(p) {
     ${navRow()}`;
 }
 
+function questionStep(sec) {
+  const a = draft.path;
+  return `
+    <h1 class="ob-h">${esc(sec.title)}</h1>
+    <p class="lede">${esc(sec.lede)}</p>
+    <div data-section="${sec.id}">
+      ${BY_SECTION(sec.id).map(q => `
+        <div class="qz">
+          <p class="fld-label">${esc(q.q)}</p>
+          ${q.type === 'time'
+            ? `<input class="time" type="time" data-q="${q.id}" data-def="${q.def}" value="${esc(a[q.id] || q.def)}">`
+            : `<div class="chips">${q.opts.map(([v, label]) => {
+                const on = q.multi ? (a[q.id] || []).includes(v) : a[q.id] === v;
+                return `<button type="button" class="chip q ${on ? 'on' : ''}" data-qid="${q.id}" data-v="${v}" ${q.multi ? 'data-multi' : ''}>${esc(label)}</button>`;
+              }).join('')}</div>`}
+        </div>`).join('')}
+    </div>
+    ${navRow()}`;
+}
+
+function pathStep() {
+  const path = derivePath(draft.path, draft.profile);
+  const last = obMode === 'path';
+  return `
+    <h1 class="ob-h">Your path</h1>
+    <p class="lede">Built from your answers. It goes into your context file, so the coach plans around it — and you can retake the questionnaire any time from Me.</p>
+    ${pathCard(path)}
+    <div class="ob-nav">
+      <button class="btn ghost" data-back>Back</button>
+      ${last ? '<button class="btn primary" data-finish>Save my path</button>' : '<button class="btn primary" data-next>Continue</button>'}
+    </div>`;
+}
+
+/** The path, as cards. Shared by onboarding and the Me screen. */
+function pathCard(path) {
+  if (!path) return '<div class="card"><p>Answer the questions first and the path appears here.</p></div>';
+  const e = path.energy;
+  const dayStart = e.grog[0], dayEnd = e.bed;
+  const total = ((dayEnd - dayStart) + 1440) % 1440 || 1440;
+  const seg = (range, cls, label) => {
+    const from = ((range[0] - dayStart) + 1440) % 1440, len = Math.max(0, range[1] - range[0]);
+    return `<i class="${cls}" style="left:${(from / total) * 100}%;width:${(len / total) * 100}%" title="${label}"></i>`;
+  };
+  return `
+    <div class="card path-head">
+      <p class="path-headline">${esc(path.headline)}</p>
+      <p class="fine">You are ${CHRONO_LABEL[path.chronotype]}.</p>
+    </div>
+
+    <div class="card">
+      <h3>Energy through the day</h3>
+      <div class="energy">
+        ${seg(e.grog, 'grog', 'groggy')}
+        ${seg(e.morningPeak, 'peak', 'morning peak')}
+        ${seg(e.dip, 'dip', 'slump')}
+        ${seg(e.eveningPeak, 'peak', 'second wind')}
+        ${seg(e.windDown, 'wind', 'wind down')}
+      </div>
+      <div class="energy-key">
+        <span><i class="peak"></i>Peak ${span(e.morningPeak[0], e.morningPeak[1])}</span>
+        <span><i class="dip"></i>Slump ${span(e.dip[0], e.dip[1])}</span>
+        <span><i class="peak"></i>Second wind ${span(e.eveningPeak[0], e.eveningPeak[1])}</span>
+        <span><i class="wind"></i>Wind down ${clock(e.windDown[0])}</span>
+      </div>
+    </div>
+
+    <div class="card path-sec">
+      <h3>Your day, in order</h3>
+      <p class="fine">Each window is good for some things and bad for others. Put things where they belong and you stop fighting your own energy.</p>
+      <ul class="dayplan">
+        ${path.schedule.map(b => `<li><time>${esc(span(b.at[0], b.at[1]))}</time><div><b>${esc(b.label)}</b><p>${esc(b.do)}</p></div></li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="card path-sec">
+      <h3>Waking</h3>
+      <div class="path-times">
+        <div><b>${clock(path.sleep.wake)}</b><span>wake, every day</span></div>
+        <div><b>${clock(path.sleep.bed)}</b><span>in bed by</span></div>
+        <div><b>${clock(path.sleep.lastCoffee)}</b><span>last coffee</span></div>
+      </div>
+      <ul>${path.sleep.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+    </div>
+
+    <div class="card path-sec">
+      <h3>Fitness</h3>
+      <div class="path-times">
+        <div><b>${path.fitness.strengthSessions}x</b><span>strength a week</span></div>
+        <div><b>${path.fitness.minutes} min</b><span>per session</span></div>
+        <div><b>${(path.fitness.stepTarget / 1000)}k</b><span>steps a day</span></div>
+      </div>
+      <ul>${path.fitness.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+    </div>
+
+    <div class="card path-sec">
+      <h3>Food</h3>
+      <div class="path-times">
+        <div><b>${clock(path.food.firstMeal)}</b><span>first protein by</span></div>
+        <div><b>${esc(path.food.bigMeal)}</b><span>the big meal</span></div>
+        <div><b>${clock(path.food.kitchenCloses)}</b><span>kitchen closes</span></div>
+      </div>
+      <ul>${path.food.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+    </div>`;
+}
+
 function resultStep(p) {
   const t = targets(p);
   return `
@@ -340,6 +470,43 @@ function resultStep(p) {
 }
 
 /* ── today ─────────────────────────────────────────────────────── */
+
+/** The tape. Weekly, so the card is quiet six days out of seven. */
+function waistCard(log) {
+  const now = S.waistNow();
+  const delta = S.waistDelta();
+  const due = S.waistDue();
+  const p = S.get().profile;
+  const goalLine = p.waistGoal ? `Goal ${p.waistGoal} in.` : 'Under 40 in is where the health risk drops.';
+  if (!due && !log.waist) {
+    return `
+    <div class="card quiet">
+      <h3>Waist</h3>
+      <p class="fine">${now} in${delta !== null ? ` · ${delta < 0 ? `down ${Math.abs(delta)}` : delta > 0 ? `up ${delta}` : 'unchanged'} since you started` : ''}. Next tape in a few days. ${goalLine}</p>
+    </div>`;
+  }
+  return `
+    <div class="card">
+      <h3>Waist${due ? ' — due this week' : ''}</h3>
+      <div class="weigh">
+        <input id="waistInput" type="number" inputmode="decimal" step="0.25" placeholder="${now ?? 'inches'}" value="${log.waist ?? ''}">
+        <button class="btn" id="waistSave">Log</button>
+      </div>
+      <p class="fine">Once a week, after the morning weigh-in: tape at the navel, relaxed, breathe out, do not pull it tight. ${now ? `Last ${now} in${delta !== null ? `, ${delta < 0 ? `down ${Math.abs(delta)}` : delta > 0 ? `up ${delta}` : 'unchanged'} overall` : ''}. ` : ''}${goalLine} When you are lifting, this moves when the scale will not.</p>
+    </div>`;
+}
+
+/** One line under the day bar: the times from the path that matter tonight. */
+function pathStrip() {
+  const s = S.get();
+  const path = derivePath(s.path?.answers, s.profile);
+  if (!path) return '';
+  return `<button class="path-strip" id="openPathBtn">
+    <span>Kitchen closes <b>${clock(path.food.kitchenCloses)}</b></span>
+    <span>Wind down <b>${clock(path.sleep.windDown)}</b></span>
+    <span>Up at <b>${clock(path.sleep.wake)}</b></span>
+  </button>`;
+}
 
 function planDay(k = S.key()) {
   const s = S.get();
@@ -389,6 +556,7 @@ function renderToday() {
       <p class="rule">${esc(headline(day))}</p>
       ${freezerNote(day) ? `<p class="freeze">${esc(freezerNote(day))}</p>` : ''}
     </div>
+    ${pathStrip()}
 
     <div class="card rings">
       <div class="ring-row">
@@ -415,12 +583,15 @@ function renderToday() {
       <p class="fine">Trend weight ${S.trend()} lb${S.trendDelta() !== null ? ` · 14-day move ${S.trendDelta() > 0 ? '+' : ''}${S.trendDelta()} lb` : ''}. React to the trend, never to one morning.</p>
     </div>
 
+    ${waistCard(log)}
+
     <div class="card">
       <h3>Note to your coach</h3>
       <textarea id="dayNote" rows="2" placeholder="Slept badly. Client dinner tonight.">${esc(log.note)}</textarea>
       <button class="btn ghost sm" id="noteSave">Save note</button>
     </div>`;
 
+  const ps = $('#openPathBtn'); if (ps) ps.onclick = openPath;
   $('#editHours').onclick = () => askHours(index, k);
   $('#wtSave').onclick = () => {
     const v = Number($('#wtInput').value);
@@ -433,6 +604,15 @@ function renderToday() {
   $('#noteSave').onclick = () => {
     S.setDay(k, { note: $('#dayNote').value });
     toast('Saved.');
+  };
+  const ws = $('#waistSave');
+  if (ws) ws.onclick = () => {
+    const v = Number($('#waistInput').value);
+    if (!v || v < 20 || v > 80) return toast('That waist looks wrong.');
+    S.setDay(k, { waist: v });
+    S.set(st => { if (!st.profile.startWaist) st.profile.startWaist = v; });
+    toast('Logged.');
+    render();
   };
 
   $$('[data-eat]').forEach(b => b.onclick = () => {
@@ -803,6 +983,13 @@ function renderMe() {
       <div><b>${S.adherence() ?? '—'}${S.adherence() !== null ? '%' : ''}</b><span>adherence</span></div>
     </div>
 
+    ${S.waistNow() ? `
+    <div class="card stats three">
+      <div><b>${S.waistNow()}</b><span>waist, inches</span></div>
+      <div><b>${S.waistDelta() !== null ? (S.waistDelta() > 0 ? '+' : '') + S.waistDelta() : '—'}</b><span>inches moved</span></div>
+      <div><b>${p.waistGoal || 40}</b><span>${p.waistGoal ? 'goal' : 'the health line'}</span></div>
+    </div>` : ''}
+
     <div class="card">
       <h3>Your targets</h3>
       <div class="target-grid sm">
@@ -816,6 +1003,7 @@ function renderMe() {
     </div>
 
     <button class="rowbtn" id="editProfile"><span>Profile and work hours</span><i>›</i></button>
+    <button class="rowbtn" id="myPath"><span>My path</span><i>${s.path?.answers ? 'sleep · energy · fitness · food' : 'not taken yet'} ›</i></button>
     <button class="rowbtn" id="editContext"><span>My context file</span><i>›</i></button>
     <button class="rowbtn" id="aiSettings"><span>AI coach</span><i>${s.settings.apiKey ? 'connected' : 'copy mode'} ›</i></button>
     <button class="rowbtn" id="dataBtn"><span>Backup and reset</span><i>›</i></button>
@@ -823,9 +1011,24 @@ function renderMe() {
     <p class="fine disclaimer">General nutrition guidance, not medical advice. If you take medication for blood pressure or diabetes, tell your doctor you are losing weight — those doses very often need adjusting as the weight comes off.</p>`;
 
   $('#editProfile').onclick = openProfile;
+  $('#myPath').onclick = openPath;
   $('#editContext').onclick = openContext;
   $('#aiSettings').onclick = openAi;
   $('#dataBtn').onclick = openData;
+}
+
+function openPath() {
+  const s = S.get();
+  const path = derivePath(s.path?.answers, s.profile);
+  sheet('My path', `
+    ${path ? pathCard(path) : '<div class="card"><p>Seventeen quick questions about how you sleep, when your energy peaks, what training you would actually do and how your hunger behaves. Two minutes. The answers shape every plan and every coaching reply.</p></div>'}
+    <button class="btn primary block" id="retakePath">${path ? 'Retake the questionnaire' : 'Take the questionnaire'}</button>
+    ${path ? `<p class="fine">Taken ${esc(s.path.takenAt)}. The times move automatically if you change your sleep need in Profile.</p>` : ''}`);
+  $('#retakePath').onclick = () => {
+    closeSheet();
+    obMode = 'path'; step = 0; draft = null;
+    show('onboard');
+  };
 }
 
 function openProfile() {
@@ -842,6 +1045,12 @@ function openProfile() {
         <select id="f-rate">
           ${[0.5, 0.75, 1, 1.5].map(v => `<option value="${v}" ${p.rate === v ? 'selected' : ''}>${v}</option>`).join('')}
         </select>
+      </label>
+    </div>
+    <div class="row2">
+      <label class="fld"><span>Waist goal (in, optional)</span><input id="f-waistgoal" type="number" inputmode="decimal" step="0.5" value="${p.waistGoal ?? ''}" placeholder="under 40"></label>
+      <label class="fld"><span>Sleep need (hours)</span>
+        <select id="f-sleep">${[6.5, 7, 7.5, 8, 8.5].map(h => `<option value="${h * 60}" ${p.sleepNeedMin === h * 60 ? 'selected' : ''}>${h}</option>`).join('')}</select>
       </label>
     </div>
     <label class="fld"><span>Activity</span>
@@ -874,6 +1083,8 @@ function openProfile() {
       q.weight = weight;
       q.goalWeight = goal;
       q.rate = Number($('#f-rate').value);
+      q.waistGoal = Number($('#f-waistgoal').value) || null;
+      q.sleepNeedMin = Number($('#f-sleep').value) || 450;
       q.activity = $('#f-activity').value;
       q.cookNights = Number($('#f-cook').value);
       q.dislikes = $('#f-dislikes').value;
@@ -1014,6 +1225,22 @@ document.addEventListener('click', e => {
   const i = list.indexOf(k);
   if (i >= 0) list.splice(i, 1); else list.push(k);
   chip.classList.toggle('on');
+});
+
+/* Questionnaire chips, same reason. */
+document.addEventListener('click', e => {
+  const chip = e.target.closest('.chip.q');
+  if (!chip || !draft) return;
+  const { qid, v } = chip.dataset;
+  if (chip.dataset.multi !== undefined) {
+    const list = draft.path[qid] ||= [];
+    const i = list.indexOf(v);
+    if (i >= 0) list.splice(i, 1); else list.push(v);
+    chip.classList.toggle('on');
+  } else {
+    draft.path[qid] = v;
+    chip.parentElement.querySelectorAll('.chip.q').forEach(c => c.classList.toggle('on', c === chip));
+  }
 });
 
 /* A day rolls over while the app sits open on the home screen. */
