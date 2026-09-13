@@ -4,7 +4,7 @@
    basement, or anywhere the signal dies. Calls to the Anthropic API are never
    cached and never intercepted — only the coach needs the network. */
 
-const CACHE = 'plate-v3';
+const CACHE = 'plate-v4';
 
 const SHELL = [
   './',
@@ -18,6 +18,9 @@ const SHELL = [
   './js/planner.js',
   './js/context.js',
   './js/ai.js',
+  './js/path.js',
+  './js/health.js',
+  './js/foods.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-180.png'

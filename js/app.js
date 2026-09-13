@@ -11,6 +11,8 @@ import { parseHealth, sleepDebt, debtBand, roughDay, fmtH } from './health.js';
 import { searchFoods, searchOnline } from './foods.js';
 import { estimateFood } from './ai.js';
 
+const BUILD = '2026-09-13b';
+
 /* ── tiny helpers ──────────────────────────────────────────────── */
 
 const $  = sel => document.querySelector(sel);
@@ -1407,6 +1409,7 @@ function renderMe() {
     <button class="rowbtn" id="aiSettings"><span>AI coach</span><i>${s.settings.apiKey ? 'connected' : 'copy mode'} ›</i></button>
     <button class="rowbtn" id="dataBtn"><span>Backup and reset</span><i>›</i></button>
 
+    <p class="fine build">Build ${BUILD}. If a new version does not show up, close the app fully and open it twice.</p>
     <p class="fine disclaimer">General nutrition guidance, not medical advice. If you take medication for blood pressure or diabetes, tell your doctor you are losing weight — those doses very often need adjusting as the weight comes off.</p>`;
 
   $('#editProfile').onclick = openProfile;
