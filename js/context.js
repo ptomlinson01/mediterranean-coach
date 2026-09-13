@@ -19,11 +19,12 @@
    the situations that actually recur, rather than a blank chat box at 7pm when
    you are too tired to write a good question. */
 
-import { get, day, key, hoursOn, trend, trendDelta, weights, adherence, waists, waistNow, waistDelta, DAY_LONG } from './store.js';
+import { get, day, key, hoursOn, trend, trendDelta, weights, adherence, waists, waistNow, waistDelta, nights, lastNight, stepsOn, extrasTotal, strengthThisWeek, addDays, parse, DAY_LONG } from './store.js';
 import { targets, dayType, ACTIVITY, weeklyHours, fmtDate } from './engine.js';
 import { BY_ID, recipeIndex } from './recipes.js';
 import { SLOTS, SLOT_LABEL, served } from './planner.js';
-import { derivePath, pathMarkdown } from './path.js';
+import { derivePath, pathMarkdown, clock } from './path.js';
+import { sleepDebt, debtBand, roughDay, fmtH } from './health.js';
 
 /* The problems worth naming. Chosen during onboarding, and they change the
    coaching more than any macro number does — a person who eats fine all day and
@@ -73,9 +74,29 @@ export function buildContext() {
   const path = derivePath(s.path?.answers, p);
   const pathBlock = path ? pathMarkdown(path) : '## Their path\nQuestionnaire not taken yet — no path to honour.\n';
 
+  const ln = lastNight(k);
+  const debt = sleepDebt(nights(k), p.sleepNeedMin || 450);
+  const rough = roughDay(ln, debt.debtMin);
+  const stepsY = stepsOn(key(addDays(parse(k), -1)));
+  const sleepBlock = ln || debt.known
+    ? `- Last night: ${ln ? `${fmtH(ln.sleepMin)} asleep${ln.inBedMin ? `, ${fmtH(ln.inBedMin)} in bed` : ''}${ln.bedtime ? `, ${ln.bedtime}–${ln.wake}` : ''} (${ln.source})` : 'no data'}.
+- Sleep debt over 14 nights: ${fmtH(debt.debtMin)} (${debtBand(debt.debtMin).label}; ${debt.known} of 14 nights known) against a ${fmtH(p.sleepNeedMin || 450)} need. Under 5h is the target.
+${rough ? `- ROUGH DAY: ${rough.why}. Expect stronger hunger from mid-afternoon and after dinner, and lower willpower. Say so before it happens. Bigger lunch, the planned snack, dinner on time, kitchen closed; walk rather than lift.` : '- Sleep is not the problem today.'}${stepsY !== null ? `\n- Steps yesterday: ${stepsY.toLocaleString()}${path ? ` against a ${path.fitness.stepTarget.toLocaleString()} floor` : ''}.` : ''}`
+    : '- No sleep data yet. Ask how they slept if it matters to the answer.';
+
   const schedule = p.workHours.map((h, i) => `${DAY_LONG[i].slice(0, 3)} ${h}h`).join(' · ');
 
   const ate = SLOTS.filter(sl => today.ate?.[sl]).map(sl => SLOT_LABEL[sl]);
+  const extras = today.extras || [];
+  const ext = extrasTotal(k);
+  const workouts = today.workouts || [];
+  const lifts = strengthThisWeek();
+  const extrasBlock = extras.length
+    ? `- Also logged with the + button (${ext.kcal} kcal, ${ext.protein} g protein on top of the plan): ${extras.map(e => `${e.name}${e.qty && e.qty !== 1 ? ` ×${e.qty}` : ''} (${Math.round(e.kcal * (e.qty || 1))} kcal)${e.at ? ` at ${e.at}` : ''}`).join('; ')}.`
+    : '- Nothing logged outside the plan today.';
+  const workoutBlock = workouts.length
+    ? `- Exercise today: ${workouts.map(w => `${w.name}, ${w.minutes} min${w.kcal ? `, ~${w.kcal} kcal` : ''} (${w.source})`).join('; ')}. Exercise calories are NOT added back to the food budget — the activity level already covers them.`
+    : '- No exercise logged today.';
 
   let planBlock = 'No week has been planned yet.';
   let todayBlock = 'No plan for today.';
@@ -140,7 +161,12 @@ ${pathBlock}
 - The rule for this kind of day: ${type.rule}
 - Most cooking that is realistic tonight: ${type.maxEffort} tier, about ${type.cookMinutes} minutes.
 - Weighed in today: ${today.weight ? today.weight + ' lb' : 'not yet'}.
+### Sleep
+${sleepBlock}
 - Eaten so far: ${ate.length ? ate.join(', ') : 'nothing ticked off'}.
+${extrasBlock}
+${workoutBlock}
+- Strength sessions this week (since Sunday): ${lifts}${path ? ` of ${path.fitness.strengthSessions} planned` : ''}.
 ${today.note ? `- Their note today: "${today.note}"\n` : ''}
 ### Today's planned meals
 ${todayBlock}

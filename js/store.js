@@ -54,14 +54,18 @@ export const DEFAULTS = {
     effort: 'low'
   },
 
-  // 'YYYY-MM-DD' -> { weight, waist, hours, ate: {slot: true}, note }
+  // 'YYYY-MM-DD' -> { weight, waist, hours, ate: {slot: true}, note,
+  //                    sleepMin, inBedMin, bedtime, wake, sleepSource, steps, restingHR,
+  //                    extras: [{name, unit, kcal, protein, qty, at}], workouts: [{type, name, minutes, kcal, source}] }
+  //  Sleep is keyed by the morning you woke up on.
   log: {},
 
   plan: null,
   grocery: { checked: [], builtFor: null },
   chat: [],
   loved: [],
-  refused: []
+  refused: [],
+  saved: []          // foods worth logging again in one tap: {name, unit, kcal, protein}
 };
 
 function merge(base, patch) {
@@ -214,6 +218,114 @@ export function waistDue() {
   if (!w.length) return true;
   const last = parse(w[w.length - 1].date);
   return (new Date() - last) / 86400000 >= 6.5;
+}
+
+/* ── sleep and the watch ───────────────────────────────────────── */
+
+/** The last fourteen nights, index 0 = last night (the morning of `k`). */
+export function nights(k = key(), n = 14) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const d = state.log[key(addDays(parse(k), -i))];
+    out.push(d && d.sleepMin > 0 ? { sleepMin: d.sleepMin, inBedMin: d.inBedMin ?? null, bedtime: d.bedtime ?? null, wake: d.wake ?? null, source: d.sleepSource || 'manual' } : null);
+  }
+  return out;
+}
+
+export const lastNight = (k = key()) => nights(k, 1)[0];
+
+/** Merge a parsed Health export into the log. Watch data beats a typed number. */
+export function importHealth(parsed) {
+  let nightsIn = 0, daysIn = 0;
+  set(s => {
+    for (const [d, n] of Object.entries(parsed.nights || {})) {
+      const cur = s.log[d] || day(d);
+      s.log[d] = { ...cur, sleepMin: n.sleepMin, inBedMin: n.inBedMin ?? cur.inBedMin ?? null, bedtime: n.bedtime ?? cur.bedtime ?? null, wake: n.wake ?? cur.wake ?? null, sleepSource: n.source || 'watch' };
+      nightsIn++;
+    }
+    for (const [d, x] of Object.entries(parsed.days || {})) {
+      const cur = s.log[d] || day(d);
+      const merged = { ...cur, ...(x.steps >= 0 ? { steps: x.steps } : {}), ...(x.restingHR > 0 ? { restingHR: x.restingHR } : {}) };
+      if (x.workouts?.length) {
+        // Replace what the watch previously said for that day; keep hand-typed ones.
+        merged.workouts = [...(cur.workouts || []).filter(w => w.source !== 'watch'), ...x.workouts];
+      }
+      s.log[d] = merged;
+      daysIn++;
+    }
+  });
+  return { nightsIn, daysIn };
+}
+
+/* ── things logged outside the plan ────────────────────────────── */
+
+export function addExtra(k, item) {
+  const entry = { name: item.name, unit: item.unit || '', kcal: Math.round(item.kcal || 0), protein: Math.round(item.protein || 0), qty: item.qty || 1, at: new Date().toTimeString().slice(0, 5) };
+  set(s => { const d = s.log[k] || day(k); s.log[k] = { ...d, extras: [...(d.extras || []), entry] }; });
+  return entry;
+}
+
+export function removeExtra(k, i) {
+  set(s => { const d = s.log[k]; if (d?.extras) d.extras = d.extras.filter((_, j) => j !== i); });
+}
+
+/** Calories and protein from everything logged with the + button today. */
+export function extrasTotal(k = key()) {
+  return (state.log[k]?.extras || []).reduce((a, e) => ({ kcal: a.kcal + Math.round(e.kcal * (e.qty || 1)), protein: a.protein + Math.round(e.protein * (e.qty || 1)) }), { kcal: 0, protein: 0 });
+}
+
+export function addWorkout(k, w) {
+  const entry = { type: w.type, name: w.name || w.type, minutes: Math.round(w.minutes || 0), kcal: Math.round(w.kcal || 0), source: w.source || 'manual' };
+  set(s => { const d = s.log[k] || day(k); s.log[k] = { ...d, workouts: [...(d.workouts || []), entry] }; });
+  return entry;
+}
+
+export function removeWorkout(k, i) {
+  set(s => { const d = s.log[k]; if (d?.workouts) d.workouts = d.workouts.filter((_, j) => j !== i); });
+}
+
+/** Strength sessions since Sunday, for the "2 a week" line. */
+export function strengthThisWeek(d = new Date()) {
+  const start = weekStart(d);
+  let n = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = key(addDays(start, i));
+    n += (state.log[k]?.workouts || []).filter(w => w.type === 'strength').length;
+  }
+  return n;
+}
+
+export function saveFood(item) {
+  set(s => {
+    const name = item.name.trim();
+    if (s.saved.some(x => x.name.toLowerCase() === name.toLowerCase())) return;
+    s.saved.unshift({ name, unit: item.unit || '', kcal: Math.round(item.kcal || 0), protein: Math.round(item.protein || 0) });
+    s.saved = s.saved.slice(0, 60);
+  });
+}
+
+export function unsaveFood(name) {
+  set(s => { s.saved = s.saved.filter(x => x.name !== name); });
+}
+
+/** The last few distinct things logged with +, newest first. */
+export function recentExtras(n = 8) {
+  const seen = new Set(), out = [];
+  const keys = Object.keys(state.log).sort().reverse();
+  for (const k of keys) {
+    for (const e of [...(state.log[k].extras || [])].reverse()) {
+      const id = e.name.toLowerCase();
+      if (seen.has(id)) continue;
+      seen.add(id); out.push({ name: e.name, unit: e.unit, kcal: e.kcal, protein: e.protein });
+      if (out.length >= n) return out;
+    }
+  }
+  return out;
+}
+
+export function stepsOn(k) {
+  const v = state.log[k]?.steps;
+  return v >= 0 ? v : null;
 }
 
 /** Share of planned meals actually ticked off over the last N days. */

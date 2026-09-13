@@ -60,6 +60,21 @@ Retake it any time.
 The waist gets measured too — weekly, at the navel — because once you are lifting the
 scale stops telling the truth and the tape does not.
 
+**Today is a morning briefing, not a stack of cards.** Mon–Sun strip (a day goes green at
+two logged meals) → one sentence on what kind of day this is and how you slept → your
+energy bar with a marker for right now and what this window is for → the check-in
+(weight, hours slept, the weekly tape; collapses once done) → the food. A white **+**
+button logs anything outside the plan: search a food database (150 common foods on the
+phone, Open Food Facts online), scan a photo (the coach estimates it; needs the API key),
+saved foods, or exercise.
+
+**Apple Watch sleep, without an app store.** A Shortcut on the phone reads Health and
+copies the last fortnight of sleep (and optionally steps and workouts) to the clipboard;
+**Paste from Watch** imports it. Sleep debt is computed the Rise way — fourteen nights,
+last night weighted 15% — and a short night or a debt over five hours makes it a *rough
+day*: the briefing and the coach both say so before the evening arrives. Setup steps are
+under Me → Apple Watch.
+
 **3. The personal-context method (after Daniel Miessler).**
 The AI coach is never asked to be clever from a cold start. There is one explicit,
 human-readable **context file** — who you are, your mission, the problems in your way,
@@ -148,6 +163,8 @@ js/
   store.js            all state, localStorage only
   context.js          the context file, the system prompt, the fourteen patterns
   path.js             the questionnaire and the path it derives (sleep, energy, fitness, food)
+  health.js           Apple Watch import: clipboard parser, sleep debt, rough-day rule
+  foods.js            the on-phone food database and Open Food Facts search
   ai.js               streaming Anthropic client
   app.js              screens and wiring
 docs/
@@ -155,6 +172,8 @@ docs/
 test/
   plan.test.mjs       planning-engine regression tests (node, no deps)
   path.test.mjs       questionnaire / path regression tests (node, no deps)
+  health.test.mjs     Watch parser, sleep debt, extras and workouts (node, no deps)
+  foods.test.mjs      food database search (node, no deps)
   ui.test.mjs         end-to-end tests in WebKit at iPhone size
 ```
 
@@ -189,6 +208,8 @@ test/
 - **Strength sessions go in a peak.** The training slot is placed inside the morning peak
   or the second wind. If the only slot you have is flat or in the slump, the path says so
   and tells you where the same session would feel easier, rather than pretending.
+- **Exercise calories are recorded, never added back.** The activity multiplier already
+  covers them; adding them again is how people out-eat a workout.
 - **A batch cook may reappear at most twice.** The supply-chain logic would happily route a
   six-serving braise across six consecutive nights, which is arithmetically perfect and
   completely inedible. Anything over the cap is flagged for the freezer.
@@ -198,6 +219,8 @@ test/
 ```bash
 node test/plan.test.mjs                      # engine + planner, no dependencies
 node test/path.test.mjs                      # questionnaire -> path, no dependencies
+node test/health.test.mjs                    # watch import, sleep debt, + logging
+node test/foods.test.mjs                     # food search
 
 npm i -D playwright && npx playwright install webkit
 python -m http.server 8777 --bind 127.0.0.1 &

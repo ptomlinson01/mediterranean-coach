@@ -115,16 +115,59 @@ await step('finish and land on Today', async () => {
 });
 await page.screenshot({ path: `${SHOT}/06-today.png`, fullPage: true });
 
-await step('today shows the path strip and a waist card', async () => {
-  const strip = await page.textContent('.path-strip');
-  if (!/Kitchen closes/.test(strip)) throw new Error('path strip missing');
+await step('today: week strip, briefing, and the morning check-in', async () => {
+  const days = await page.$$('.dayb');
+  if (days.length !== 7) throw new Error(`expected 7 day bubbles, got ${days.length}`);
+  const first = await page.textContent('.dayb:first-child span');
+  if (first !== 'Mon') throw new Error(`week should start Monday, got ${first}`);
+  if (!(await page.isVisible('.dayb.today'))) throw new Error('today is not marked in the strip');
+  const nowLabel = await page.textContent('.now-label');
+  if (!/Now/.test(nowLabel)) throw new Error('the "now" window is missing from the briefing');
+  await page.fill('#wtInput', '208');
+  await page.fill('#slInput', '6.5');
   await page.fill('#waistInput', '42.5');
-  await page.click('#waistSave');
-  await page.waitForTimeout(200);
-  const val = await page.inputValue('#waistInput');
-  if (val !== '42.5') throw new Error(`waist did not persist on the card: "${val}"`);
-  const heading = await page.textContent('#waistInput >> xpath=../../h3');
-  if (/due/.test(heading)) throw new Error('waist card still says due after logging');
+  await page.click('#ciSave');
+  await page.waitForTimeout(250);
+  const sum = await page.textContent('.ci-sum');
+  if (!/208 lb/.test(sum) || !/6h 30m/.test(sum) || !/42.5/.test(sum)) throw new Error(`check-in did not collapse to a summary: ${sum}`);
+  const chip = await page.textContent('#logSleepBtn');
+  if (!/Slept 6h 30m/.test(chip)) throw new Error(`sleep chip wrong: ${chip}`);
+  await page.screenshot({ path: `${SHOT}/06b-today-checked-in.png`, fullPage: true });
+});
+
+await step('the + button: food database search logs a banana', async () => {
+  const before = Number(await page.textContent('.metric b'));
+  await page.click('#addBtn');
+  await page.waitForSelector('[data-mode="search"]');
+  await page.screenshot({ path: `${SHOT}/06c-add-sheet.png` });
+  await page.click('[data-mode="search"]');
+  await page.fill('#foodQ', 'banana');
+  await page.waitForSelector('[data-food]');
+  await page.click('[data-food="0"]');
+  await page.waitForSelector('#cfAdd');
+  await page.click('#cfSave');
+  await page.waitForSelector('#cfSave');
+  await page.click('#cfAdd');
+  await page.waitForTimeout(250);
+  const after = Number(await page.textContent('.metric b'));
+  if (after - before !== 105) throw new Error(`banana should add 105 kcal, bar moved ${before} -> ${after}`);
+  const also = await page.textContent('.also b');
+  if (!/Banana/.test(also)) throw new Error('Also logged does not list the banana');
+});
+
+await step('the + button: saved foods and exercise', async () => {
+  await page.click('#addBtn');
+  await page.click('[data-mode="saved"]');
+  await page.waitForSelector('[data-food="0"]');
+  const savedName = await page.textContent('[data-food="0"] b');
+  if (!/Banana/.test(savedName)) throw new Error('saved banana not listed');
+  await page.click('#addBack');
+  await page.click('[data-mode="exercise"]');
+  await page.fill('#exMin', '30');
+  await page.click('#exSave');
+  await page.waitForTimeout(250);
+  const rows = await page.$$eval('.also b', els => els.map(e => e.textContent));
+  if (!rows.some(t => /Strength/.test(t))) throw new Error(`exercise not in Also logged: ${rows}`);
 });
 
 await step('mark a meal eaten updates the calorie bar', async () => {
@@ -134,6 +177,7 @@ await step('mark a meal eaten updates the calorie bar', async () => {
   const after = await page.textContent('.metric b');
   if (before === after) throw new Error(`bar did not move (${before} -> ${after})`);
   console.log(`      eaten total ${before} -> ${after}`);
+  if (!(await page.isVisible('.dayb.today.full'))) throw new Error('today should turn green at two meals (breakfast + the banana)');
 });
 
 await step('change hours re-tunes the day', async () => {
@@ -216,7 +260,7 @@ await step('me tab and the context file', async () => {
   await page.click('#editContext');
   await page.waitForSelector('pre.ctx', { timeout: 3000 });
   const ctxText = await page.textContent('pre.ctx');
-  for (const need of ['CONTEXT FILE', 'Long days wreck the plan', 'Brutal', 'sardines', 'Their path', 'Kitchen closes 8pm', 'Waist at the navel: 42.5', 'The day in order']) {
+  for (const need of ['CONTEXT FILE', 'Long days wreck the plan', 'Brutal', 'sardines', 'Their path', 'Kitchen closes 8pm', 'Waist at the navel: 42.5', 'The day in order', 'Last night: 6h 30m', 'Banana', 'Strength sessions this week (since Sunday): 1']) {
     if (!ctxText.includes(need)) throw new Error(`context missing "${need}"`);
   }
   if (/undefined|NaN/.test(ctxText)) throw new Error('context contains undefined/NaN');

@@ -7,6 +7,9 @@ import { SLOTS, SLOT_LABEL, buildWeek, swap, retune, groceries, qty, headline, f
 import { PROBLEMS, PATTERNS, buildContext, portablePack } from './context.js';
 import { MODELS, ask, testKey, AiError } from './ai.js';
 import { SECTIONS, BY_SECTION, blankAnswers, derivePath, clock, span, CHRONO_LABEL } from './path.js';
+import { parseHealth, sleepDebt, debtBand, roughDay, fmtH } from './health.js';
+import { searchFoods, searchOnline } from './foods.js';
+import { estimateFood } from './ai.js';
 
 /* ── tiny helpers ──────────────────────────────────────────────── */
 
@@ -471,48 +474,137 @@ function resultStep(p) {
 
 /* ── today ─────────────────────────────────────────────────────── */
 
-/** The tape. Weekly, so the card is quiet six days out of seven. */
-function waistCard(log) {
-  const now = S.waistNow();
-  const delta = S.waistDelta();
-  const due = S.waistDue();
-  const p = S.get().profile;
-  const goalLine = p.waistGoal ? `Goal ${p.waistGoal} in.` : 'Under 40 in is where the health risk drops.';
-  if (!due && !log.waist) {
-    return `
-    <div class="card quiet">
-      <h3>Waist</h3>
-      <p class="fine">${now} in${delta !== null ? ` · ${delta < 0 ? `down ${Math.abs(delta)}` : delta > 0 ? `up ${delta}` : 'unchanged'} since you started` : ''}. Next tape in a few days. ${goalLine}</p>
-    </div>`;
-  }
-  return `
-    <div class="card">
-      <h3>Waist${due ? ' — due this week' : ''}</h3>
-      <div class="weigh">
-        <input id="waistInput" type="number" inputmode="decimal" step="0.25" placeholder="${now ?? 'inches'}" value="${log.waist ?? ''}">
-        <button class="btn" id="waistSave">Log</button>
-      </div>
-      <p class="fine">Once a week, after the morning weigh-in: tape at the navel, relaxed, breathe out, do not pull it tight. ${now ? `Last ${now} in${delta !== null ? `, ${delta < 0 ? `down ${Math.abs(delta)}` : delta > 0 ? `up ${delta}` : 'unchanged'} overall` : ''}. ` : ''}${goalLine} When you are lifting, this moves when the scale will not.</p>
-    </div>`;
-}
+/* Today reads top to bottom the way a morning does: what kind of day this is
+   and how you slept (one sentence), where you are in your own energy right
+   now, the check-in (weight, sleep, the weekly tape), then the food. */
 
-/** One line under the day bar: the times from the path that matter tonight. */
-function pathStrip() {
-  const s = S.get();
-  const path = derivePath(s.path?.answers, s.profile);
-  if (!path) return '';
-  return `<button class="path-strip" id="openPathBtn">
-    <span>Kitchen closes <b>${clock(path.food.kitchenCloses)}</b></span>
-    <span>Wind down <b>${clock(path.sleep.windDown)}</b></span>
-    <span>Up at <b>${clock(path.sleep.wake)}</b></span>
-  </button>`;
-}
+let checkinOpen = null;   // null = decide from what is logged; true/false = the user chose
 
 function planDay(k = S.key()) {
   const s = S.get();
   if (!s.plan) return null;
   const i = s.plan.days.findIndex(d => d.date === k);
   return i < 0 ? null : { day: s.plan.days[i], index: i };
+}
+
+function todayPath() {
+  const s = S.get();
+  return derivePath(s.path?.answers, s.profile);
+}
+
+function sleepState(k) {
+  const p = S.get().profile;
+  const ln = S.lastNight(k);
+  const debt = sleepDebt(S.nights(k), p.sleepNeedMin || 450);
+  return { ln, debt, band: debtBand(debt.debtMin), rough: roughDay(ln, debt.debtMin) };
+}
+
+/** Which window of the path we are in right now, and what is next. */
+function nowWindow(path) {
+  if (!path) return null;
+  const d = new Date();
+  let now = d.getHours() * 60 + d.getMinutes();
+  if (now < path.sleep.wake - 120) now += 1440;      // small hours belong to yesterday's timeline
+  const sch = path.schedule;
+  if (now >= path.sleep.bed) return { label: 'Past bedtime', do: `You planned to be asleep by ${clock(path.sleep.bed)}. Tomorrow starts with how tonight ends.`, until: null, next: null };
+  if (now < sch[0].at[0]) return { label: 'Before the alarm', do: `Up at ${clock(path.sleep.wake)}. If you are awake now, daylight and a glass of water beat lying there.`, until: sch[0].at[0], next: sch[0] };
+  for (let i = 0; i < sch.length; i++) {
+    const b = sch[i];
+    if (now >= b.at[0] && now < b.at[1]) return { ...b, until: b.at[1], next: sch[i + 1] || null };
+  }
+  const last = sch[sch.length - 1];
+  return { ...last, until: last.at[1], next: null };
+}
+
+/** The one sentence at the top. Sleep first, because it changes the day. */
+function briefing(day, type, ss, path) {
+  if (ss.rough && path) {
+    const e = path.energy;
+    return `${cap(ss.rough.why)} on a ${type.label.toLowerCase()}. Hunger will come early and late — the planned snack at ${clock(e.dip[0] + 30)}, dinner on time, kitchen closed at ${clock(path.food.kitchenCloses)}. Walk today, do not lift.`;
+  }
+  if (ss.rough) return `${cap(ss.rough.why)} on a ${type.label.toLowerCase()}. Expect stronger pulls mid-afternoon and after dinner; eat the planned snack and keep dinner on plan.`;
+  return headline(day);
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+function sleepChip(ss) {
+  if (!ss.ln && !ss.debt.known) return `<button class="chip-btn muted" id="logSleepBtn">Sleep not logged</button>`;
+  const tone = ss.rough ? 'bad' : ss.band.tone;
+  const slept = ss.ln ? `Slept ${fmtH(ss.ln.sleepMin)}` : 'No sleep data last night';
+  return `<button class="chip-btn ${tone}" id="logSleepBtn">${slept} · debt ${fmtH(ss.debt.debtMin)}</button>`;
+}
+
+function briefingCard(day, type, hrs, ss, path) {
+  const nw = nowWindow(path);
+  const e = path?.energy;
+  let energyRow = '';
+  if (path && e) {
+    const dayStart = e.grog[0], total = ((e.bed - dayStart) + 1440) % 1440 || 1440;
+    const seg = (r, cls) => `<i class="${cls}" style="left:${(((r[0] - dayStart) + 1440) % 1440) / total * 100}%;width:${Math.max(0, r[1] - r[0]) / total * 100}%"></i>`;
+    const d = new Date();
+    let now = d.getHours() * 60 + d.getMinutes();
+    if (now < dayStart - 120) now += 1440;
+    const nowPct = Math.max(0, Math.min(100, ((now - dayStart) / total) * 100));
+    energyRow = `
+      <div class="energy slim">
+        ${seg(e.grog, 'grog')}${seg(e.morningPeak, 'peak')}${seg(e.dip, 'dip')}${seg(e.eveningPeak, 'peak')}${seg(e.windDown, 'wind')}
+        <b class="now" style="left:${nowPct}%"></b>
+      </div>
+      <div class="now-row">
+        <div><span class="now-label">Now · ${esc(nw.label)}${nw.until ? ` until ${clock(nw.until)}` : ''}</span><p>${esc(nw.do)}</p></div>
+      </div>
+      ${nw.next ? `<p class="next">Next: ${esc(nw.next.label.toLowerCase())} at ${clock(nw.next.at[0])} · kitchen closes ${clock(path.food.kitchenCloses)} · bed ${clock(path.sleep.bed)}</p>` : ''}`;
+  } else {
+    energyRow = `<button class="rowbtn inset" id="openPathBtn"><span>Take the two-minute questionnaire to see your energy through the day</span><i>›</i></button>`;
+  }
+  return `
+    <div class="daybar" style="--tone:${type.colour}">
+      <div class="daybar-top">
+        <div class="pills"><span class="pill" style="background:${type.colour}">${esc(type.label)}</span>${sleepChip(ss)}</div>
+        <button class="hours-btn" id="editHours">${hrs}h ✎</button>
+      </div>
+      <p class="rule">${esc(briefing(day, type, ss, path))}</p>
+      ${freezerNote(day) ? `<p class="freeze">${esc(freezerNote(day))}</p>` : ''}
+      ${energyRow}
+    </div>`;
+}
+
+/** Weight, sleep, the weekly tape — one card, collapsed once it is done. */
+function checkinCard(k, log, ss) {
+  const waistDue = S.waistDue() || log.waist;
+  const done = log.weight && (log.sleepMin > 0) && (!S.waistDue() || log.waist);
+  const open = checkinOpen === null ? !done : checkinOpen;
+  const trendLine = `Trend ${S.trend()} lb${S.trendDelta() !== null ? ` (${S.trendDelta() > 0 ? '+' : ''}${S.trendDelta()} over 14 days)` : ''}`;
+  const waistNow = S.waistNow(), wd = S.waistDelta();
+  const waistLine = waistNow ? `waist ${waistNow} in${wd !== null ? ` (${wd > 0 ? '+' : ''}${wd})` : ''}` : 'waist not measured';
+  const summary = [
+    log.weight ? `${log.weight} lb` : 'no weigh-in',
+    log.sleepMin > 0 ? `slept ${fmtH(log.sleepMin)}${log.sleepSource === 'watch' ? ' ⌚' : ''}` : 'sleep not logged',
+    log.waist ? `waist ${log.waist} in` : null
+  ].filter(Boolean).join(' · ');
+
+  if (!open) {
+    return `
+    <div class="card checkin">
+      <div class="ci-head"><h3>This morning</h3><button class="link" id="ciToggle">Edit</button></div>
+      <p class="ci-sum">${esc(summary)}</p>
+      <p class="fine">${esc(trendLine)} · ${esc(waistLine)}.</p>
+    </div>`;
+  }
+  return `
+    <div class="card checkin">
+      <div class="ci-head"><h3>This morning</h3>${done ? '<button class="link" id="ciToggle">Done</button>' : ''}</div>
+      <div class="ci-grid ${waistDue ? 'three' : ''}">
+        <label><span>Weight (lb)</span><input id="wtInput" type="number" inputmode="decimal" step="0.1" placeholder="${S.trend()}" value="${log.weight ?? ''}"></label>
+        <label><span>Slept (hours)</span><input id="slInput" type="number" inputmode="decimal" step="0.25" placeholder="7.5" value="${log.sleepMin > 0 ? Math.round(log.sleepMin / 15) / 4 : ''}"></label>
+        ${waistDue ? `<label><span>Waist (in)</span><input id="waistInput" type="number" inputmode="decimal" step="0.25" placeholder="${waistNow ?? 'navel'}" value="${log.waist ?? ''}"></label>` : ''}
+      </div>
+      <div class="ci-actions">
+        <button class="btn primary" id="ciSave">Save</button>
+        <button class="btn ghost" id="pasteWatch">⌚ Paste from Watch</button>
+      </div>
+      <p class="fine">${esc(trendLine)}. ${waistDue ? 'Tape at the navel, relaxed, breathing out — once a week. ' : ''}${ss.debt.known ? `Sleep debt ${fmtH(ss.debt.debtMin)} over ${ss.debt.known} known nights. ` : ''}<a href="#" id="watchHelp">How the Watch button works</a>.</p>
+    </div>`;
 }
 
 function renderToday() {
@@ -524,6 +616,8 @@ function renderToday() {
   const hrs = S.hoursOn(k);
   const type = dayType(hrs);
   const found = planDay(k);
+  const path = todayPath();
+  const ss = sleepState(k);
 
   $('#hdrTitle').textContent = 'Today';
   $('#hdrSub').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -545,18 +639,15 @@ function renderToday() {
     if (v) { acc.kcal += v.kcal; acc.protein += v.protein; }
     return acc;
   }, { kcal: 0, protein: 0 });
+  const ext = S.extrasTotal(k);
+  ateTotals.kcal += ext.kcal;
+  ateTotals.protein += ext.protein;
   const dayTot = totals(day);
 
   $('#todayHost').innerHTML = `
-    <div class="daybar" style="--tone:${type.colour}">
-      <div class="daybar-top">
-        <span class="pill" style="background:${type.colour}">${esc(type.label)}</span>
-        <button class="hours-btn" id="editHours">${hrs}h worked ✎</button>
-      </div>
-      <p class="rule">${esc(headline(day))}</p>
-      ${freezerNote(day) ? `<p class="freeze">${esc(freezerNote(day))}</p>` : ''}
-    </div>
-    ${pathStrip()}
+    ${dayStrip(k)}
+    ${briefingCard(day, type, hrs, ss, path)}
+    ${checkinCard(k, log, ss)}
 
     <div class="card rings">
       <div class="ring-row">
@@ -573,46 +664,46 @@ function renderToday() {
     </div>
 
     ${SLOTS.map(sl => mealCard(day, index, sl, log)).join('')}
-
-    <div class="card">
-      <h3>Weigh-in</h3>
-      <div class="weigh">
-        <input id="wtInput" type="number" inputmode="decimal" step="0.1" placeholder="${S.trend()}" value="${log.weight ?? ''}">
-        <button class="btn" id="wtSave">Log</button>
-      </div>
-      <p class="fine">Trend weight ${S.trend()} lb${S.trendDelta() !== null ? ` · 14-day move ${S.trendDelta() > 0 ? '+' : ''}${S.trendDelta()} lb` : ''}. React to the trend, never to one morning.</p>
-    </div>
-
-    ${waistCard(log)}
+    ${alsoLoggedCard(k, log)}
 
     <div class="card">
       <h3>Note to your coach</h3>
-      <textarea id="dayNote" rows="2" placeholder="Slept badly. Client dinner tonight.">${esc(log.note)}</textarea>
+      <textarea id="dayNote" rows="2" placeholder="Client dinner tonight. Knee is sore.">${esc(log.note)}</textarea>
       <button class="btn ghost sm" id="noteSave">Save note</button>
-    </div>`;
+    </div>
+
+    <button class="fab" id="addBtn" aria-label="Add food or exercise">+</button>`;
+
+  $('#addBtn').onclick = () => openAdd(k);
+  $$('[data-rm-extra]').forEach(b => b.onclick = () => { S.removeExtra(k, Number(b.dataset.rmExtra)); render(); });
+  $$('[data-rm-workout]').forEach(b => b.onclick = () => { S.removeWorkout(k, Number(b.dataset.rmWorkout)); render(); });
+  $$('[data-day]').forEach(b => b.onclick = () => show('week'));
 
   const ps = $('#openPathBtn'); if (ps) ps.onclick = openPath;
   $('#editHours').onclick = () => askHours(index, k);
-  $('#wtSave').onclick = () => {
-    const v = Number($('#wtInput').value);
-    if (!v || v < 60 || v > 700) return toast('That weight looks wrong.');
-    S.setDay(k, { weight: v });
-    S.set(st => { st.profile.weight = v; });
+  $('#logSleepBtn').onclick = () => { checkinOpen = true; render(); $('#slInput')?.focus(); };
+  const tg = $('#ciToggle'); if (tg) tg.onclick = () => { checkinOpen = tg.textContent === 'Edit'; render(); };
+  const save = $('#ciSave');
+  if (save) save.onclick = () => {
+    const patch = {};
+    const w = Number($('#wtInput').value);
+    if ($('#wtInput').value) { if (w < 60 || w > 700) return toast('That weight looks wrong.'); patch.weight = w; }
+    const sl = Number($('#slInput').value);
+    if ($('#slInput').value) { if (sl < 1 || sl > 16) return toast('Sleep in hours, please.'); if (log.sleepSource !== 'watch' || Math.round(sl * 60) !== log.sleepMin) { patch.sleepMin = Math.round(sl * 60); patch.sleepSource = 'manual'; } }
+    const wi = $('#waistInput');
+    if (wi && wi.value) { const v = Number(wi.value); if (v < 20 || v > 80) return toast('That waist looks wrong.'); patch.waist = v; }
+    if (!Object.keys(patch).length) return toast('Nothing to save yet.');
+    S.setDay(k, patch);
+    S.set(st => { if (patch.weight) st.profile.weight = patch.weight; if (patch.waist && !st.profile.startWaist) st.profile.startWaist = patch.waist; });
+    checkinOpen = null;
     toast('Logged.');
     render();
   };
+  const pw = $('#pasteWatch'); if (pw) pw.onclick = pasteFromWatch;
+  const wh = $('#watchHelp'); if (wh) wh.onclick = e => { e.preventDefault(); openWatch(); };
   $('#noteSave').onclick = () => {
     S.setDay(k, { note: $('#dayNote').value });
     toast('Saved.');
-  };
-  const ws = $('#waistSave');
-  if (ws) ws.onclick = () => {
-    const v = Number($('#waistInput').value);
-    if (!v || v < 20 || v > 80) return toast('That waist looks wrong.');
-    S.setDay(k, { waist: v });
-    S.set(st => { if (!st.profile.startWaist) st.profile.startWaist = v; });
-    toast('Logged.');
-    render();
   };
 
   $$('[data-eat]').forEach(b => b.onclick = () => {
@@ -631,6 +722,313 @@ function renderToday() {
     toast(`Swapped to ${chosen.name}.`);
     render();
   });
+}
+
+/* ── the week strip, the + button and the four ways to log ─────── */
+
+/** How many meals a day has: planned slots ticked, plus anything added with +. */
+function mealsLogged(k) {
+  const d = S.get().log[k];
+  if (!d) return 0;
+  return Object.values(d.ate || {}).filter(Boolean).length + (d.extras || []).length;
+}
+
+/** Mon → Sun. Today ringed; a day goes green at two meals. */
+function dayStrip(k) {
+  const today = S.parse(k);
+  const mon = S.addDays(today, -((today.getDay() + 6) % 7));
+  return `<div class="daystrip">${Array.from({ length: 7 }, (_, i) => {
+    const d = S.addDays(mon, i), dk = S.key(d);
+    const n = mealsLogged(dk);
+    const cls = [dk === k ? 'today' : '', n >= 2 ? 'full' : n === 1 ? 'half' : '', d > today ? 'future' : ''].join(' ');
+    return `<button class="dayb ${cls}" data-day="${dk}"><span>${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</span><b>${d.getDate()}</b></button>`;
+  }).join('')}</div>`;
+}
+
+function alsoLoggedCard(k, log) {
+  const extras = log.extras || [], workouts = log.workouts || [];
+  if (!extras.length && !workouts.length) return '';
+  const row = (icon, name, sub, kcal, rm) => `
+    <div class="also">
+      <span class="ic">${icon}</span>
+      <div><b>${esc(name)}</b><span>${esc(sub)}</span></div>
+      <em>${kcal}</em>
+      <button class="x" ${rm} aria-label="Remove">×</button>
+    </div>`;
+  return `
+    <div class="card">
+      <h3>Also logged</h3>
+      ${extras.map((e, i) => row('🍴', `${e.name}${e.qty && e.qty !== 1 ? ` ×${e.qty}` : ''}`, `${e.unit || ''}${e.at ? ` · ${e.at}` : ''}`, `${Math.round(e.kcal * (e.qty || 1))} kcal`, `data-rm-extra="${i}"`)).join('')}
+      ${workouts.map((w, i) => row(w.type === 'strength' ? '🏋️' : w.type === 'walk' ? '🚶' : w.type === 'cardio' ? '🚴' : w.type === 'sport' ? '🎾' : '⚡', w.name, `${w.minutes} min · ${w.source === 'watch' ? 'from the Watch' : 'typed in'}`, w.kcal ? `~${w.kcal} kcal` : '', `data-rm-workout="${i}"`)).join('')}
+      ${workouts.length ? '<p class="fine">Exercise calories are shown, not added back to the food budget — your activity level already accounts for them.</p>' : ''}
+    </div>`;
+}
+
+/* The + sheet. One entry point, four ways in; each re-renders the same
+   sheet body so the Back button always works. */
+let addCtl = null;   // AbortController for an online search in flight
+
+function openAdd(k, mode = null) {
+  if (addCtl) { addCtl.abort(); addCtl = null; }
+  const back = `<button class="link" id="addBack">‹ Back</button>`;
+  if (!mode) {
+    sheet('Add', `
+      <div class="add-grid">
+        <button class="add-opt" data-mode="search"><span>🔍</span><b>Food database</b><i>Search common foods, or online for packaged ones</i></button>
+        <button class="add-opt" data-mode="scan"><span>📷</span><b>Scan food</b><i>Take a photo and let the coach estimate it</i></button>
+        <button class="add-opt" data-mode="saved"><span>⭐</span><b>Saved foods</b><i>Things you log often, one tap</i></button>
+        <button class="add-opt" data-mode="exercise"><span>🏋️</span><b>Log exercise</b><i>Typed in, or from the Watch</i></button>
+      </div>`);
+    $$('[data-mode]').forEach(b => b.onclick = () => openAdd(k, b.dataset.mode));
+    return;
+  }
+  if (mode === 'search') return addSearch(k, back);
+  if (mode === 'scan') return addScan(k, back);
+  if (mode === 'saved') return addSaved(k, back);
+  if (mode === 'exercise') return addExercise(k, back);
+}
+
+const foodRow = (f, i, extra = '') => `
+  <div class="frow" data-food="${i}">
+    <div><b>${esc(f.n)}</b><span>${esc(f.u)}${extra}</span></div>
+    <em>${f.k} kcal · ${f.p}g</em>
+  </div>`;
+
+function addSearch(k, back) {
+  sheet('Food database', `
+    ${back}
+    <input id="foodQ" type="search" placeholder="banana, ribeye, IPA, salmon roll…" autocomplete="off">
+    <div id="foodResults" class="frows"><p class="fine">Start typing. The recipe bank and about 150 common foods are searched on the phone; tap <b>Search online</b> for packaged and branded items.</p></div>`);
+  $('#addBack').onclick = () => openAdd(k);
+  const q = $('#foodQ'), host = $('#foodResults');
+  let results = [];
+  const paint = (extraHtml = '') => {
+    host.innerHTML = results.length
+      ? results.map((f, i) => foodRow(f, i, f.t === 'recipe' ? ' · from your recipes' : f.t === 'online' ? ' · online' : '')).join('') + extraHtml
+      : `<p class="fine">Nothing on the phone matches.</p>${extraHtml}`;
+    $$('[data-food]').forEach(r => r.onclick = () => confirmFood(k, results[Number(r.dataset.food)], () => openAdd(k, 'search')));
+    const ob = $('#onlineBtn'); if (ob) ob.onclick = online;
+  };
+  const local = () => {
+    const term = q.value.trim();
+    if (!term) { results = []; host.innerHTML = '<p class="fine">Start typing.</p>'; return; }
+    const recipes = searchRecipes(term).slice(0, 4).map(r => ({ n: r.name, u: '1 serving', k: r.kcal, p: r.protein, t: 'recipe' }));
+    results = [...searchFoods(term, 10), ...recipes];   // plain foods first; a recipe is a whole meal
+    paint(`<button class="btn ghost sm" id="onlineBtn">Search online for “${esc(term)}”</button>`);
+  };
+  const online = async () => {
+    const term = q.value.trim(); if (!term) return;
+    host.insertAdjacentHTML('beforeend', '<p class="fine" id="onlineWait">Searching Open Food Facts…</p>');
+    addCtl = new AbortController();
+    try {
+      const found = await searchOnline(term, addCtl.signal);
+      results = [...results.filter(f => f.t !== 'online'), ...found];
+      paint(found.length ? '' : '<p class="fine">Nothing online either. Try fewer words, or the brand name.</p>');
+    } catch (err) {
+      if (err.name !== 'AbortError') { $('#onlineWait')?.remove(); toast('Online search failed. Check the connection.'); }
+    }
+  };
+  q.oninput = local;
+  q.focus();
+}
+
+/** Portion and save, then it goes on today's list. */
+function confirmFood(k, f, onBack) {
+  const saved = S.get().saved.some(x => x.name.toLowerCase() === f.n.toLowerCase());
+  sheet(f.n, `
+    <button class="link" id="cfBack">‹ Back</button>
+    <p class="lede">${esc(f.u)} — ${f.k} kcal, ${f.p} g protein</p>
+    <p class="fld-label">How much?</p>
+    <div class="chips" id="qtyChips">
+      ${[0.5, 1, 1.5, 2, 3].map(x => `<button class="chip ${x === 1 ? 'on' : ''}" data-qty="${x}">${x === 0.5 ? 'half' : x === 1 ? 'one' : x === 1.5 ? 'one and a half' : x === 2 ? 'two' : 'three'}</button>`).join('')}
+    </div>
+    <p class="fine" id="cfTotal">One ${esc(f.u)}: ${f.k} kcal, ${f.p} g protein.</p>
+    <div class="ci-actions">
+      <button class="btn primary" id="cfAdd">Add to today</button>
+      <button class="btn ghost" id="cfSave">${saved ? '★ Saved' : '☆ Save'}</button>
+    </div>`);
+  let qty = 1;
+  $('#cfBack').onclick = onBack;
+  $$('[data-qty]').forEach(b => b.onclick = () => {
+    qty = Number(b.dataset.qty);
+    $$('[data-qty]').forEach(c => c.classList.toggle('on', c === b));
+    $('#cfTotal').textContent = `${qty} × ${f.u}: ${Math.round(f.k * qty)} kcal, ${Math.round(f.p * qty)} g protein.`;
+  });
+  $('#cfSave').onclick = () => {
+    if (saved) { S.unsaveFood(f.n); toast('Removed from saved.'); }
+    else { S.saveFood({ name: f.n, unit: f.u, kcal: f.k, protein: f.p }); toast('Saved for next time.'); }
+    confirmFood(k, f, onBack);
+  };
+  $('#cfAdd').onclick = () => {
+    S.addExtra(k, { name: f.n, unit: f.u, kcal: f.k, protein: f.p, qty });
+    closeSheet();
+    toast(`Logged ${f.n}.`);
+    render();
+  };
+}
+
+function addSaved(k, back) {
+  const saved = S.get().saved;
+  const recent = S.recentExtras(8).filter(r => !saved.some(x => x.name.toLowerCase() === r.name.toLowerCase()));
+  const list = (items, off) => items.map((f, i) => foodRow({ n: f.name, u: f.unit, k: f.kcal, p: f.protein }, off + i)).join('');
+  sheet('Saved foods', `
+    ${back}
+    ${saved.length ? `<h3>Saved</h3><div class="frows">${list(saved, 0)}</div>` : '<p class="fine">Nothing saved yet. When you add a food, tap ☆ Save and it lands here.</p>'}
+    ${recent.length ? `<h3>Recent</h3><div class="frows">${list(recent, saved.length)}</div>` : ''}`);
+  $('#addBack').onclick = () => openAdd(k);
+  const all = [...saved, ...recent];
+  $$('[data-food]').forEach(r => r.onclick = () => {
+    const f = all[Number(r.dataset.food)];
+    confirmFood(k, { n: f.name, u: f.unit, k: f.kcal, p: f.protein }, () => openAdd(k, 'saved'));
+  });
+}
+
+function addScan(k, back) {
+  const hasKey = !!S.get().settings.apiKey;
+  sheet('Scan food', `
+    ${back}
+    ${hasKey ? '' : '<p class="lede">Scanning a photo uses the AI coach, which needs a key under <b>Me → AI coach</b>. Until then, use the food database.</p>'}
+    <label class="btn primary block scan-btn">📷 Take a photo<input id="scanFile" type="file" accept="image/*" capture="environment" hidden ${hasKey ? '' : 'disabled'}></label>
+    <label class="btn ghost block scan-btn">Choose from photos<input id="scanPick" type="file" accept="image/*" hidden ${hasKey ? '' : 'disabled'}></label>
+    <input id="scanHint" placeholder="Optional: “half of it”, “with rice”, “restaurant portion”">
+    <div id="scanOut"></div>`);
+  $('#addBack').onclick = () => openAdd(k);
+  const handle = async file => {
+    if (!file) return;
+    const out = $('#scanOut');
+    out.innerHTML = '<p class="fine">Reading the photo…</p>';
+    let dataUrl;
+    try { dataUrl = await shrinkImage(file, 1024); } catch { out.innerHTML = '<p class="fine">Could not read that image.</p>'; return; }
+    out.innerHTML = `<img class="scan-preview" src="${dataUrl}" alt=""><p class="fine">Estimating…</p>`;
+    try {
+      const est = await estimateFood(dataUrl, $('#scanHint').value.trim());
+      if (!est.items.length) { out.innerHTML += `<p class="fine">${esc(est.note || 'No food found.')}</p>`; return; }
+      out.innerHTML = `
+        <img class="scan-preview" src="${dataUrl}" alt="">
+        <p class="fine">${esc(est.note || '')} Edit anything that looks wrong, then add.</p>
+        ${est.items.map((it, i) => `
+          <div class="est">
+            <input data-est-name="${i}" value="${esc(it.name)}">
+            <input data-est-kcal="${i}" type="number" inputmode="numeric" value="${it.kcal}"><span>kcal</span>
+            <input data-est-p="${i}" type="number" inputmode="numeric" value="${it.protein}"><span>g</span>
+            <label class="tick sm"><input type="checkbox" data-est-on="${i}" checked></label>
+          </div>
+          <p class="fine est-portion">${esc(it.portion)}</p>`).join('')}
+        <button class="btn primary block" id="estAdd">Add to today</button>`;
+      $('#estAdd').onclick = () => {
+        let n = 0;
+        est.items.forEach((it, i) => {
+          if (!$(`[data-est-on="${i}"]`).checked) return;
+          S.addExtra(k, { name: $(`[data-est-name="${i}"]`).value.trim() || it.name, unit: it.portion, kcal: Number($(`[data-est-kcal="${i}"]`).value) || 0, protein: Number($(`[data-est-p="${i}"]`).value) || 0, qty: 1 });
+          n++;
+        });
+        closeSheet();
+        toast(n ? `Logged ${n} item${n === 1 ? '' : 's'} from the photo.` : 'Nothing selected.');
+        render();
+      };
+    } catch (err) {
+      out.innerHTML = `<img class="scan-preview" src="${dataUrl}" alt=""><p class="fine">${esc(err.message || 'The estimate failed.')}</p>`;
+    }
+  };
+  $('#scanFile').onchange = e => handle(e.target.files[0]);
+  $('#scanPick').onchange = e => handle(e.target.files[0]);
+}
+
+/** Phones take 12-megapixel photos; the model needs a thousand pixels. */
+function shrinkImage(file, max) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function addExercise(k, back) {
+  const kinds = [['strength', '🏋️ Strength'], ['walk', '🚶 Walk'], ['cardio', '🚴 Cardio'], ['sport', '🎾 Sport'], ['other', '⚡ Other']];
+  sheet('Log exercise', `
+    ${back}
+    <p class="fld-label">What was it?</p>
+    <div class="chips">${kinds.map(([v, l], i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-kind="${v}">${l}</button>`).join('')}</div>
+    <div class="row2">
+      <label class="fld"><span>Minutes</span><input id="exMin" type="number" inputmode="numeric" placeholder="30"></label>
+      <label class="fld"><span>Calories (optional)</span><input id="exKcal" type="number" inputmode="numeric" placeholder="from the Watch"></label>
+    </div>
+    <label class="fld"><span>Name (optional)</span><input id="exName" placeholder="Dumbbells in the garage"></label>
+    <div class="ci-actions">
+      <button class="btn primary" id="exSave">Log it</button>
+      <button class="btn ghost" id="exWatch">⌚ Paste from Watch</button>
+    </div>
+    <p class="fine">Strength sessions this week: <b>${S.strengthThisWeek()}</b>. The Watch button imports workouts along with sleep if the Shortcut exports them — see Me → Apple Watch. Calories burned are recorded, not added back to what you can eat.</p>`);
+  $('#addBack').onclick = () => openAdd(k);
+  let kind = 'strength';
+  $$('[data-kind]').forEach(b => b.onclick = () => { kind = b.dataset.kind; $$('[data-kind]').forEach(c => c.classList.toggle('on', c === b)); });
+  $('#exWatch').onclick = pasteFromWatch;
+  $('#exSave').onclick = () => {
+    const minutes = Number($('#exMin').value);
+    if (!(minutes > 0 && minutes < 600)) return toast('How many minutes?');
+    const label = kinds.find(x => x[0] === kind)[1].replace(/^\S+\s/, '');
+    S.addWorkout(k, { type: kind, name: $('#exName').value.trim() || label, minutes, kcal: Number($('#exKcal').value) || 0 });
+    closeSheet();
+    toast(`Logged ${minutes} minutes.`);
+    render();
+  };
+}
+
+/* ── the watch ─────────────────────────────────────────────────── */
+
+async function pasteFromWatch() {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); }
+  catch { return openWatch(true); }          // no permission: fall back to a paste box
+  importText(text);
+}
+
+function importText(text) {
+  const parsed = parseHealth(text);
+  if (!parsed.samples) {
+    toast('Nothing from Health on the clipboard. Run the Shortcut first.');
+    return false;
+  }
+  const r = S.importHealth(parsed);
+  checkinOpen = null;
+  closeSheet();
+  toast(`Imported ${r.nightsIn} night${r.nightsIn === 1 ? '' : 's'}${r.daysIn ? ` and ${r.daysIn} days` : ''}.`);
+  render();
+  return true;
+}
+
+/** Setup and fallback for the Watch pipeline. */
+function openWatch(pasteFirst = false) {
+  sheet('Apple Watch', `
+    ${pasteFirst ? '<p class="lede">Safari did not let the app read the clipboard. Paste here instead.</p>' : ''}
+    <textarea id="watchPaste" rows="4" placeholder="Run the Shortcut, then paste here"></textarea>
+    <button class="btn primary" id="watchImport">Import</button>
+
+    <h3>How it works</h3>
+    <p class="fine">A web app cannot read Apple Health directly, so a Shortcut on your phone reads the Watch's sleep and copies it to the clipboard. Tap <b>Paste from Watch</b> on Today and the app takes it from there. Nothing is uploaded anywhere.</p>
+
+    <h3>Build the Shortcut once</h3>
+    <ol class="steps">
+      <li>Open <b>Shortcuts</b>, tap <b>+</b>, name it <b>Trim Path</b>.</li>
+      <li>Add <b>Find Health Samples</b>. Set <b>Type</b> to <b>Sleep Analysis</b>. Add a filter: <b>Start Date · is in the last · 14 days</b>. Sort by Start Date.</li>
+      <li>Add <b>Repeat with Each</b> (it will pick up the Health Samples).</li>
+      <li>Inside the repeat, add <b>Text</b> and type exactly:<br><code>sleep|Repeat Item|Repeat Item|Repeat Item</code><br>Then tap the three <i>Repeat Item</i> tokens in turn and change them to <b>Value</b>, <b>Start Date</b>, <b>End Date</b>. For the two dates, tap the token again → <b>Date Format: Custom</b> → <code>yyyy-MM-dd HH:mm</code>.</li>
+      <li>After the repeat, add <b>Combine Text</b> (Repeat Results, with New Lines), then <b>Copy to Clipboard</b>.</li>
+      <li>Optional, for steps: add a second <b>Find Health Samples</b> with Type <b>Steps</b>, same 14-day filter, <b>Group By Day</b>; repeat it with a Text of <code>steps|Start Date|Value</code> (date format <code>yyyy-MM-dd</code>) and combine both results before copying.</li>
+      <li>Optional, for workouts: <b>Find Workouts</b> (last 14 days), repeat with a Text of <code>workout|Start Date|Workout Type|Duration|Active Energy</code> — Start Date as <code>yyyy-MM-dd HH:mm</code>, Duration in minutes, Active Energy in kcal.</li>
+    </ol>
+    <p class="fine">Then, each morning: run the Shortcut (add it to the Home Screen or ask Siri), open this app, tap Paste from Watch. To make it automatic, add a Shortcuts <b>Automation</b> for when your alarm stops — the phone must be unlocked for Health to be read, so a fixed time will not work.</p>
+    <p class="fine">The app takes any line shaped <code>sleep|value|start|end</code>; Awake segments are dropped and overlapping phone and Watch records are merged, not double counted.</p>`);
+  $('#watchImport').onclick = () => importText($('#watchPaste').value);
 }
 
 function mealCard(day, index, slot, log) {
@@ -1004,6 +1402,7 @@ function renderMe() {
 
     <button class="rowbtn" id="editProfile"><span>Profile and work hours</span><i>›</i></button>
     <button class="rowbtn" id="myPath"><span>My path</span><i>${s.path?.answers ? 'sleep · energy · fitness · food' : 'not taken yet'} ›</i></button>
+    <button class="rowbtn" id="watchBtn"><span>Apple Watch</span><i>${S.nights().some(Boolean) ? 'sleep connected' : 'set up'} ›</i></button>
     <button class="rowbtn" id="editContext"><span>My context file</span><i>›</i></button>
     <button class="rowbtn" id="aiSettings"><span>AI coach</span><i>${s.settings.apiKey ? 'connected' : 'copy mode'} ›</i></button>
     <button class="rowbtn" id="dataBtn"><span>Backup and reset</span><i>›</i></button>
@@ -1012,6 +1411,7 @@ function renderMe() {
 
   $('#editProfile').onclick = openProfile;
   $('#myPath').onclick = openPath;
+  $('#watchBtn').onclick = () => openWatch();
   $('#editContext').onclick = openContext;
   $('#aiSettings').onclick = openAi;
   $('#dataBtn').onclick = openData;

@@ -128,6 +128,61 @@ export async function ask(messages, onText, signal) {
   return full;
 }
 
+/**
+ * Look at a photo of food and estimate what is on the plate. Not streamed —
+ * the answer is a small JSON object, and the user edits it before it is
+ * logged. Deliberately uses its own short system prompt rather than the
+ * whole coaching context; this is a measuring job, not advice.
+ *
+ * @param dataUrl  image as a data: URL (already resized by the caller)
+ * @param hint     anything the user typed, e.g. "half of it" or "with rice"
+ * @returns {items:[{name, portion, kcal, protein}], note}
+ */
+export async function estimateFood(dataUrl, hint = '') {
+  const s = get();
+  const apiKey = (s.settings.apiKey || '').trim();
+  if (!apiKey) throw new AiError('Scanning a photo needs the AI coach connected. Add a key under Me → AI coach.', 'nokey');
+
+  const m = String(dataUrl).match(/^data:(image\/[a-z]+);base64,(.+)$/i);
+  if (!m) throw new AiError('That image could not be read.', 'api');
+
+  const system = `You estimate food from a photo for a calorie log. Reply with JSON only, no prose, shaped exactly:
+{"items":[{"name":"...","portion":"...","kcal":0,"protein":0}],"note":"..."}
+Rules: name each distinct food in plain American grocery words; portion is what is visibly on the plate (e.g. "about 6 oz", "1 cup", "2 slices"); kcal and protein (grams) are integers for that portion, erring slightly high for restaurant food and fried things; at most 6 items; "note" is one short sentence on how confident you are and what you assumed. If there is no food in the picture, return {"items":[],"note":"No food visible."}.`;
+
+  let res;
+  try {
+    res = await fetch(URL, {
+      method: 'POST', headers: headers(apiKey),
+      body: JSON.stringify({
+        model: s.settings.model,
+        max_tokens: 600,
+        system,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: m[1].toLowerCase(), data: m[2] } },
+          { type: 'text', text: hint ? `Context from me: ${hint}` : 'Estimate this.' }
+        ] }]
+      })
+    });
+  } catch {
+    throw new AiError('Could not reach Anthropic. Check your connection.', 'network');
+  }
+  if (!res.ok) throw await describeFailure(res);
+  const j = await res.json();
+  const text = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  const jm = text.match(/\{[\s\S]*\}/);
+  if (!jm) throw new AiError('The model did not return an estimate. Try a clearer photo.', 'api');
+  let out;
+  try { out = JSON.parse(jm[0]); } catch { throw new AiError('The estimate came back garbled. Try again.', 'api'); }
+  out.items = (out.items || []).map(i => ({
+    name: String(i.name || 'Food').slice(0, 60),
+    portion: String(i.portion || '').slice(0, 40),
+    kcal: Math.max(0, Math.round(Number(i.kcal) || 0)),
+    protein: Math.max(0, Math.round(Number(i.protein) || 0))
+  })).slice(0, 6);
+  return out;
+}
+
 /** A cheap round trip to confirm a pasted key actually works. */
 export async function testKey(apiKey, model) {
   try {
