@@ -48,7 +48,19 @@
 <script type="module" src="js/app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+        reg.update().catch(() => {});
+        // When a new worker takes over, reload once so the new files are what is on screen.
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded || !navigator.serviceWorker.controller) return;
+          reloaded = true;
+          location.reload();
+        });
+      } catch { /* offline, or no service workers here */ }
+    });
   }
 </script>
 </body>
